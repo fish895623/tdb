@@ -1,4 +1,5 @@
 build/
 CMakeFiles/
+tdatabase.db
 .cache/
 testing_file.txt
