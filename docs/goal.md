@@ -35,6 +35,34 @@ It is built from scratch: no SQLite, no external storage dependencies.
 | Delete / update / WAL | ⏳ planned |
 | SQL query layer | ⏳ planned |
 
+## IDE Integration (schema-aware tooling)
+
+goal: IDE users get automatic schema-based code completion for `tdb`
+tables/columns, even though no existing IDE supports `tdb` out of the box
+(same situation as Neo4j in IntelliJ — support is what the plugin builds).
+
+contract:
+- the engine exports its schema as **`tdb.schema.json`** (tables, columns,
+  `FieldType`). This JSON is the stable interface for all IDE tooling —
+  no tool ever parses the binary `tdatabase.db` format.
+- optional `tdb` CLI binary for query execution from IDE tools.
+
+front-ends (one contract, three consumers):
+1. **IntelliJ plugin** (Kotlin): custom tool window + completion.
+   - schema completion: table/column names in queries and in
+     C++ API calls like `db.GetTable("…")`
+   - read-only data browser (from schema JSON)
+   - query console (shells out to the `tdb` CLI)
+   - deliberately the *lightweight* tier: own tool window, NOT the
+     JDBC-based `com.intellij.database` tier-2 API (that path serves
+     JDBC databases and belongs to DataGrip; Neo4j/Redis/MongoDB
+     plugins all use the lightweight tier).
+2. **LSP server**: completion for both VS Code and IntelliJ (JetBrains
+   LSP client, 2023.3+) from one implementation — candidate for
+   replacing/duplicating the plugin later.
+3. **VS Code**: today covered by clangd + generated schema header;
+   later the LSP server.
+
 ## Roadmap
 
 1. **dd-001**: page format, `BufferPool` (clock eviction), B+tree index
@@ -42,3 +70,7 @@ It is built from scratch: no SQLite, no external storage dependencies.
 2. Variable-length records (text) with in-page / overflow-page layout.
 3. Delete/update semantics + write-ahead log for crash durability.
 4. Simple SQL parser over the C++ API.
+5. Schema JSON export (`tdb.schema.json`) + `tdb` CLI — the IDE contract.
+6. IntelliJ plugin (lightweight tier): schema completion, data browser,
+   query console. (dd-002, pending)
+7. LSP server for cross-editor completion (VS Code + IntelliJ).
