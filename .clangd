@@ -1,0 +1,8 @@
+# Clangd configuration for the tdb project.
+# Compile flags come from build/debug/compile_commands.json
+# (generated with CMAKE_EXPORT_COMPILE_COMMANDS=ON in the "debug" preset).
+CompileFlags:
+  CompilationDatabase: build/debug
+
+Diagnostics:
+  UnusedIncludes: Crashing

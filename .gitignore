@@ -1,3 +1,4 @@
 build/
+CMakeFiles/
 .cache/
 testing_file.txt

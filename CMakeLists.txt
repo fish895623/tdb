@@ -6,7 +6,11 @@ set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
+find_package(SQLite3 REQUIRED)
+
 add_executable(${PROJECT_NAME} main.cpp)
+target_include_directories(${PROJECT_NAME} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/include)
+target_link_libraries(${PROJECT_NAME} PRIVATE SQLite::SQLite3)
 
 include(CTest)
 

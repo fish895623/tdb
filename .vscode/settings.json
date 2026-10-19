@@ -1,0 +1,12 @@
+{
+  "cmake.configurePreset": "debug",
+  "cmake.buildPreset": "debug",
+  "cmake.testPreset": "debug",
+  "cmake.useCMakePresets": "enabled",
+  "C_Cpp.default.cppStandard": "c++23",
+  "C_Cpp.default.includePath": [
+    "${workspaceFolder}/include",
+    "${workspaceFolder}/**"
+  ],
+  "C_Cpp.default.compileCommands": "${workspaceFolder}/build/debug/compile_commands.json"
+}
