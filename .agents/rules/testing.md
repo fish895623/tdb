@@ -10,7 +10,9 @@ paths:
   beyond `tempfile`.
 - Integration tests live in `tests/`, one file per library module
   (`tests/types.rs` for `types`, etc.) and use only the public API.
-  `tests/smoke.rs` runs the `tdbd` program end to end.
+  `tests/config.rs` covers settings parsing and validation, and
+  `tests/smoke.rs` runs the `tdbd` program end to end (it clears `RUST_LOG` and
+  `TDB_CONFIG` so results don't depend on the developer's shell).
 - Name tests `<module>_<behaviour>` in snake_case, e.g.
   `record_round_trip_int32_truncates_fraction`.
 - Tests that touch disk use `tempfile` and run inside the temp directory. Never

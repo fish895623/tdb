@@ -1,0 +1,14 @@
+# tdb settings. Every key is optional; the values here are the defaults.
+# The programs read the first of: --config <path>, $TDB_CONFIG, ./config.toml.
+
+[database]
+path = "tdatabase.db"
+
+[log]
+# off | error | warn | info | debug | trace. The RUST_LOG variable overrides it.
+level = "trace"
+
+[storage]
+# Reserved: takes effect when the page store lands (docs/dd-001-large-index.md).
+page_size = 16384      # bytes; a power of two from 4096 to 65536
+buffer_pool_mb = 256   # RAM for cached pages

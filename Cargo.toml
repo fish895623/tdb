@@ -7,13 +7,18 @@ description = "An embedded, file-based database engine"
 publish = false
 
 [features]
-# Logging setup for the bundled programs; the library only uses the `log` facade.
 default = ["cli"]
-cli = ["dep:env_logger"]
+# Load settings from TOML (`Config::from_toml_str` / `Config::load`).
+config = ["dep:serde", "dep:toml"]
+# Everything the bundled programs need. The library alone only needs `log`.
+cli = ["config", "dep:env_logger", "dep:anyhow"]
 
 [dependencies]
 log = "0.4"
+anyhow = { version = "1", optional = true }
 env_logger = { version = "0.11", optional = true }
+serde = { version = "1", features = ["derive"], optional = true }
+toml = { version = "1", optional = true }
 
 [dev-dependencies]
 tempfile = "3"
@@ -22,6 +27,10 @@ uuid = { version = "1", features = ["v7"] }
 [[bin]]
 name = "tdbd"
 required-features = ["cli"]
+
+[[test]]
+name = "config"
+required-features = ["config"]
 
 [[test]]
 name = "smoke"
