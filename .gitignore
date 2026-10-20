@@ -4,3 +4,4 @@ tdatabase.db
 .cache/
 testing_file.txt
 .env*
+.idea/
