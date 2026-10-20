@@ -1,0 +1,20 @@
+# Keep clang-tidy quiet: real bugs, obvious performance wins, and a couple of
+# plain-C++ modernizations. Add checks one by one; don't enable whole groups
+# like readability-*, cppcoreguidelines-*, or llvmlibc-*.
+Checks: >
+  -*,
+  clang-analyzer-*,
+  -clang-analyzer-optin.core.EnumCastOutOfRange,
+  bugprone-*,
+  -bugprone-easily-swappable-parameters,
+  -bugprone-exception-escape,
+  -bugprone-integer-division,
+  -bugprone-signed-bitwise,
+  performance-*,
+  -performance-avoid-endl,
+  -performance-enum-size,
+  modernize-use-nullptr,
+  modernize-use-override
+# Only report on our own headers, not spdlog/fmt/GoogleTest.
+HeaderFilterRegex: '.*/include/tdb/.*'
+WarningsAsErrors: ''
