@@ -1639,3 +1639,80 @@ fn common_very_long_words_numbers_and_strings_are_single_tokens() {
     let blank_lines = "\n".repeat(n);
     assert_eq!(eof_position(&blank_lines), (n + 1, 1));
 }
+
+// ---------------------------------------------------------------------------
+// A long run of characters never exhausts the stack (DD-003 "Details")
+// ---------------------------------------------------------------------------
+
+/// Long enough to overflow a test thread's 2 MiB stack in a debug build if
+/// the lexer recursed once per character, as logos's code for `\S*`, `\s+` and
+/// `[^\n]*` over multi-byte text does. Statements arrive from the network, so
+/// this is a remote crash, not a curiosity.
+const LONG_RUN: usize = 200_000;
+
+/// Lex `input` in `model`, and return the tokens without their `EndOfFile`.
+fn lex_run(input: &str, model: Model) -> Vec<Token> {
+    let mut tokens = Lexer::for_model(input, model)
+        .tokenize()
+        .unwrap_or_else(|e| panic!("{e}"));
+    assert_eq!(tokens.pop().map(|t| t.kind), Some(T::EndOfFile));
+    tokens
+}
+
+#[test]
+fn common_long_non_ascii_kv_word_is_one_word() {
+    let word = "é".repeat(LONG_RUN);
+    let tokens = lex_run(&format!("SET k {word}"), Model::Keyval);
+    assert_eq!(tokens.len(), 3);
+    assert_eq!(
+        (tokens[2].kind, tokens[2].value.as_str()),
+        (T::Word, word.as_str())
+    );
+}
+
+#[test]
+fn common_long_run_of_non_ascii_whitespace_separates_two_tokens() {
+    // U+3000 is White_Space, so it is skipped like a space.
+    let blanks = "\u{3000}".repeat(LONG_RUN);
+
+    let tokens = lex_run(&format!("SELECT{blanks}1;"), Model::Rdbms);
+    let shape: Vec<_> = tokens.iter().map(|t| t.kind).collect();
+    assert_eq!(
+        shape,
+        [T::Keyword(Keyword::Select), T::Integer, T::Semicolon]
+    );
+
+    let tokens = lex_run(&format!("SET{blanks}k{blanks}v"), Model::Keyval);
+    let words: Vec<_> = tokens.iter().map(|t| t.value.as_str()).collect();
+    assert_eq!(words, ["SET", "k", "v"]);
+}
+
+#[test]
+fn common_long_non_ascii_line_comment_is_skipped_up_to_the_newline() {
+    let comment = "é".repeat(LONG_RUN);
+    for model in [Model::Rdbms, Model::Vector, Model::Graph] {
+        let tokens = lex_run(&format!("SELECT 1 // {comment}\n, 2;"), model);
+        let values: Vec<_> = tokens.iter().map(|t| t.value.as_str()).collect();
+        assert_eq!(values, ["SELECT", "1", ",", "2", ";"], "{model}");
+        // The comment's line is counted: `, 2;` is on line 2.
+        assert_eq!(tokens[2].line, 2, "{model}");
+    }
+
+    // A comment that ends the input needs no newline.
+    let tokens = lex_run(&format!("SELECT 1; // {comment}"), Model::Rdbms);
+    assert_eq!(tokens.len(), 3);
+}
+
+#[test]
+fn common_long_runs_of_every_kind_lex_in_detecting_mode_too() {
+    let word = "é".repeat(LONG_RUN);
+    let blanks = "\u{2003}".repeat(LONG_RUN);
+    // One script mixing models, as `Lexer::new` accepts.
+    let script = format!("GET {word}\nSELECT{blanks}1; // {word}\nSET k v\n");
+    let tokens = tokenize(&script).unwrap_or_else(|e| panic!("{e}"));
+    let words: Vec<_> = tokens.iter().map(|t| t.value.as_str()).collect();
+    assert_eq!(words.first().copied(), Some("GET"));
+    assert_eq!(words.get(1).copied(), Some(word.as_str()));
+    assert!(words.contains(&"SELECT"));
+    assert_eq!(words.last().copied(), Some(""));
+}
