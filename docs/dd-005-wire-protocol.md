@@ -46,6 +46,7 @@ The two programs are a server and its client, the arrangement MariaDB has with
 | Default address | port 3306 | `127.0.0.1:7878` |
 | Connect | `mariadb -h HOST -P PORT db` | `tdb --url tdb://HOST:PORT/MODEL/DB` |
 | One statement | `mariadb -e "SELECT 1"` | `tdb "SELECT 1;"` |
+| A shell | `mariadb` | `tdb` |
 
 - **`tdbd` is the only process that opens the database file.** It holds the
   engine and the file for as long as it runs, and answers connections. A client
@@ -57,8 +58,8 @@ The two programs are a server and its client, the arrangement MariaDB has with
 - **A connection has a model as well as a database**, because tdb serves four
   models from one server. MariaDB's `mariadb db` picks one database; a tdb route
   is `/<model>/<database>`.
-- **Not yet like MariaDB:** accounts and TLS (see "Not in v1"), and an
-  interactive shell. `tdb` sends one statement per run.
+- **Not yet like MariaDB:** accounts and TLS (see "Not in v1"), and line
+  editing and history in the shell.
 
 ## Framing
 
@@ -218,6 +219,27 @@ When `tdbd` is told to stop (SIGINT or SIGTERM), the server:
   `rdbms` from `vector`, so ask for `vector` with `--model`. The **database** is
   `main`. `--model` with a route in the URL is a usage error: it would say the
   model twice.
+- `tdb` with no statement is the shell: one connection, opened by the first
+  statement, and one `Query` per statement read from standard input. It is the
+  same client as `tdb "<STATEMENT>"` (which `--local` is not part of: there is no local shell), so the route is chosen the same way (the
+  URL's, else `--model`, else the first statement's first word) and then stays
+  for the connection, because a connection has one model (see "A connection").
+  `\use /MODEL/DATABASE` closes the connection and opens one on another route.
+  It does not need any message of its own: requests are already answered one at
+  a time, in order.
+  - A statement ends with `;` at the end of a line, except in `keyval`, where
+    it ends at the end of the line, as a Redis command does. A last statement
+    without its `;` is sent at the end of the input. `help`, `quit`, `exit`,
+    `\use`, `\c` and the other `\` words are the shell's own and are never sent.
+  - An error reply that leaves the connection open (`Lex`, `TooLarge`) leaves
+    the shell on it. Any other error closes the connection, and the next
+    statement connects again.
+  - On a terminal, a failed statement is printed as `ERROR: ...` and the shell
+    goes on. When standard input is a pipe or a file, the first failure ends the
+    run with status 1 (as `mariadb` does in batch mode), so a script does not go
+    on after a statement that did not work. The prompt and the "Connected to"
+    line are only shown on a terminal, so the output of a script is only
+    replies.
 - A URL takes no credentials (`user:password@` is refused, and not repeated in
   the error), and a port is decimal digits.
 - The default port, 7878, is in both `tdb-config` (`DEFAULT_LISTEN_PORT`) and

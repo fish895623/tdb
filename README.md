@@ -31,8 +31,8 @@ sends statements. If you know MariaDB, you know the arrangement:
 | Server settings | `my.cnf` | [`config.toml`](config.toml), and `--listen` |
 | Connect | `mariadb -h HOST -P PORT db` | `tdb --url tdb://HOST:PORT/MODEL/DB` |
 | Run one statement | `mariadb -e "SELECT 1"` | `tdb "SELECT 1;"` |
+| Interactive shell | `mariadb` | `tdb` |
 | Accounts and TLS | yes | not yet |
-| Interactive shell | yes | not yet: one statement per run |
 
 One difference follows from the engine: tdb has four models in one server, so a
 connection picks a *model* as well as a database (`/keyval/main`, `/graph/social`,
@@ -42,7 +42,18 @@ with `--model` or in the URL.
 ```sh
 cargo run --bin tdbd                  # terminal 1: the server, on 127.0.0.1:7878
 cargo run --bin tdb -- "GET user:1"   # terminal 2: the client sends it a statement
+cargo run --bin tdb                   # or no statement: a shell, many statements on one connection
 ```
+
+With no statement, `tdb` is a shell. It reads statements from standard input, so
+it also takes a script: `tdb < queries.tdb`. A statement ends with `;` at the end
+of a line (a keyval statement is a line, as in Redis). `help` lists the shell's
+commands:
+`\use /MODEL/DATABASE` to change model or database, `\c` to drop a statement you
+are typing, `quit` to leave. On a terminal a failed statement is reported and
+you carry on; from a pipe or a file the first failure ends the run with status 1,
+so a script does not go on past a statement that did not work. There is no line
+editing or history yet.
 
 `tdbd` is the process that opens the database file, and clients talk to it over
 the protocol instead of opening the file themselves. The engine does not lock the
@@ -83,10 +94,10 @@ cargo run --bin tdbd -- --help
 # the client, with a tdbd running
 cargo run --bin tdb -- "MATCH (n) RETURN n;"
 cargo run --bin tdb -- --url tdb://127.0.0.1:7878/graph/social "MATCH (n) RETURN n;"
+cargo run --bin tdb -- --url tdb://127.0.0.1:7878/graph/social   # a shell on that route
 
 # the client without a server: tokenizes here
 cargo run --bin tdb -- --local "MATCH (n) RETURN n;"
-cargo run --bin tdb                   # one built-in statement per model
 ```
 
 The server's settings live in [`config.toml`](config.toml); every key is

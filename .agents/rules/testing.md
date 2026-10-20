@@ -35,7 +35,10 @@ paths:
     `remote` module runs `tdb` against a real `tdbd`, and reads the server's debug
     log (`route /graph/main`) to check which route the client chose. Daemons always
     listen on port 0 (`Daemon::spawn` adds `--listen 127.0.0.1:0`), so tests
-    never collide with each other or with a real `tdbd`
+    never collide with each other or with a real `tdbd`. The shell (`tdb` with
+    no statement) is tested by writing statements to `tdb`'s standard input, a pipe and so
+    not a terminal: a test cannot reach the terminal behaviour (the prompt, and
+    `ERROR:` followed by carrying on), so change that by hand on a pty
 - Name tests `<module>_<behaviour>` in snake_case, e.g.
   `record_round_trip_int32_truncates_fraction`.
 - Tests that touch disk use `tempfile` and run inside the temp directory. Never

@@ -3,13 +3,30 @@
 #[cfg(unix)]
 mod support;
 
-use std::process::{Command, Output};
+use std::io::Write;
+use std::process::{Command, Output, Stdio};
 
 fn tdb(args: &[&str]) -> Output {
     Command::new(env!("CARGO_BIN_EXE_tdb"))
         .args(args)
         .output()
         .unwrap()
+}
+
+/// `tdb` with `input` on its standard input, which is a pipe and so not a
+/// terminal.
+fn tdb_with_input(args: &[&str], input: &str) -> Output {
+    let mut child = Command::new(env!("CARGO_BIN_EXE_tdb"))
+        .args(args)
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .unwrap();
+    // Dropped at the end of the statement, so the program sees the end of its
+    // input. (A program that quits early may close the pipe first.)
+    let _ = child.stdin.take().unwrap().write_all(input.as_bytes());
+    child.wait_with_output().unwrap()
 }
 
 fn stdout(out: &Output) -> String {
@@ -21,27 +38,18 @@ fn stderr(out: &Output) -> String {
 }
 
 #[test]
-fn tdb_without_arguments_tokenizes_one_statement_per_model() {
-    let out = tdb(&[]);
+fn tdb_without_arguments_is_a_shell_and_prints_nothing_of_its_own() {
+    // No built-in statements are tokenized: it waits for input, and an input
+    // with nothing in it ends it.
+    let out = tdb_with_input(&[], "");
     assert!(out.status.success(), "{}", stderr(&out));
-    let text = stdout(&out);
-    for model in ["Keyval", "Rdbms", "Vector", "Graph"] {
-        assert!(text.contains(&format!("[{model}] ")), "{model}: {text}");
-    }
-}
+    assert_eq!(stdout(&out), "");
+    assert_eq!(stderr(&out), "");
 
-#[test]
-fn tdb_model_flag_narrows_the_demo_to_that_model() {
-    let out = tdb(&["--model", "graph"]);
+    // The model flag alone does not turn it into anything else.
+    let out = tdb_with_input(&["--model", "graph"], "");
     assert!(out.status.success(), "{}", stderr(&out));
-    let text = stdout(&out);
-    assert!(text.contains("[Graph] "), "{text}");
-    for other in ["Keyval", "Rdbms", "Vector"] {
-        assert!(!text.contains(&format!("[{other}] ")), "{other}: {text}");
-    }
-
-    let short = tdb(&["-m", "graph"]);
-    assert_eq!(stdout(&short), text);
+    assert_eq!(stdout(&out), "");
 }
 
 #[test]
@@ -52,7 +60,6 @@ fn tdb_tokenizes_a_statement_given_as_an_argument() {
     let text = stdout(&out);
     assert!(text.contains("Keyword(GET)"), "{text}");
     assert!(text.contains("EndOfFile"), "{text}");
-    assert!(!text.contains('['), "no demo header expected: {text}");
 }
 
 #[test]
@@ -158,7 +165,7 @@ fn tdb_url_must_be_a_valid_tdb_url_and_is_checked_before_connecting() {
 }
 
 #[test]
-fn tdb_url_conflicts_with_model_and_needs_a_statement() {
+fn tdb_url_conflicts_with_model_and_local() {
     let url = "tdb://127.0.0.1:7878/keyval/main";
 
     // --model and a route in the URL would say the model twice.
@@ -172,10 +179,104 @@ fn tdb_url_conflicts_with_model_and_needs_a_statement() {
     let out = tdb(&["--url", url, "--local", "GET x"]);
     assert_eq!(out.status.code(), Some(2));
     assert!(stderr(&out).contains("--local"), "{}", stderr(&out));
+}
 
-    let out = tdb(&["--url", url]);
+#[test]
+fn tdb_shell_answers_help_and_quit_without_a_server() {
+    let out = tdb_with_input(&[], "help\nquit\nGET never-reached\n");
+    assert!(out.status.success(), "{}", stderr(&out));
+    let text = stdout(&out);
+    assert!(text.contains("\\use /MODEL/DATABASE"), "{text}");
+    assert!(text.contains("quit, exit"), "{text}");
+    assert!(!text.contains("Keyword"), "{text}");
+    assert_eq!(stderr(&out), "");
+
+    // Each way of saying it, with and without the `;`, in any case.
+    for quit in ["quit", "exit", "\\q", "QUIT;", "  Exit ;  "] {
+        let out = tdb_with_input(&[], &format!("{quit}\nhelp\n"));
+        assert!(out.status.success(), "{quit}: {}", stderr(&out));
+        assert_eq!(stdout(&out), "", "{quit}");
+    }
+    for help in ["help", "\\h", "\\?", "HELP;"] {
+        let out = tdb_with_input(&[], &format!("{help}\n"));
+        assert!(stdout(&out).contains("\\use"), "{help}");
+    }
+}
+
+#[test]
+fn tdb_shell_input_that_is_empty_or_blank_does_nothing() {
+    for input in ["", "\n", "  \n\n\t\n"] {
+        let out = tdb_with_input(&[], input);
+        assert!(out.status.success(), "{input:?}: {}", stderr(&out));
+        assert_eq!(stdout(&out), "", "{input:?}");
+        assert_eq!(stderr(&out), "", "{input:?}");
+    }
+}
+
+#[test]
+fn tdb_shell_stops_at_an_unknown_command_when_input_is_not_a_terminal() {
+    let out = tdb_with_input(&[], "\\bogus\nhelp\n");
+    assert_eq!(out.status.code(), Some(1));
+    assert!(
+        stderr(&out).contains("unknown command \\bogus"),
+        "{}",
+        stderr(&out)
+    );
+    // `help` after it was never run.
+    assert_eq!(stdout(&out), "");
+}
+
+#[test]
+fn tdb_shell_c_drops_the_statement_being_typed() {
+    // `\c` discards what is half typed, so the leftover `SELECT` is not sent
+    // (there is no server to send it to). On a first line, it is a command
+    // like any other and the shell does not have it.
+    let out = tdb_with_input(&["-m", "graph"], "MATCH (n)\n\\c\nquit\n");
+    assert!(out.status.success(), "{}", stderr(&out));
+    assert_eq!(stdout(&out), "");
+
+    let out = tdb_with_input(&[], "\\c\n");
+    assert_eq!(out.status.code(), Some(1));
+    assert!(
+        stderr(&out).contains("unknown command \\c"),
+        "{}",
+        stderr(&out)
+    );
+}
+
+#[test]
+fn tdb_local_needs_a_statement_and_the_shell_does_not_say_the_model_twice() {
+    // There is no local shell: lexing here takes the statement it lexes.
+    let out = tdb(&["--local"]);
     assert_eq!(out.status.code(), Some(2));
     assert!(stderr(&out).contains("STATEMENT"), "{}", stderr(&out));
+
+    let out = tdb_with_input(
+        &["--model", "graph", "--url", "tdb://127.0.0.1:7878/graph/g"],
+        "quit\n",
+    );
+    assert_eq!(out.status.code(), Some(2));
+    let err = stderr(&out);
+    assert!(err.contains("--model") && err.contains("route"), "{err}");
+}
+
+#[test]
+fn tdb_shell_takes_a_url_without_a_statement() {
+    // The URL is checked as usual, before anything is read or connected.
+    let out = tdb_with_input(&["--url", "http://x/keyval/main"], "quit\n");
+    assert_eq!(out.status.code(), Some(2));
+    assert!(stderr(&out).contains("tdb://"), "{}", stderr(&out));
+
+    let out = tdb_with_input(&["--url", "tdb://127.0.0.1:7878"], "quit\n");
+    assert!(out.status.success(), "{}", stderr(&out));
+}
+
+#[test]
+fn tdb_help_describes_the_shell() {
+    let text = stdout(&tdb(&["--help"]));
+    assert!(text.contains("shell"), "{text}");
+    assert!(text.contains("standard input"), "{text}");
+    assert!(!text.contains("--interactive"), "{text}");
 }
 
 #[cfg(unix)]
@@ -188,7 +289,7 @@ mod remote {
     use std::thread;
 
     use super::support::Daemon;
-    use super::{stderr, stdout, tdb};
+    use super::{stderr, stdout, tdb, tdb_with_input};
 
     const STATEMENTS: &[(&str, &str)] = &[
         ("keyval", "SET user:1 \"Ada\"\n"),
@@ -404,5 +505,207 @@ mod remote {
         // over the limit.
         let err = stderr(&out);
         assert!(err.contains("too large"), "{err}");
+    }
+
+    /// How many connections the server's log says were made on `route`.
+    fn connections(log: &str, route: &str) -> usize {
+        log.matches(&format!("route {route}")).count()
+    }
+
+    #[test]
+    fn tdb_shell_sends_every_statement_over_one_connection() {
+        let (_dir, daemon, root) = start();
+        let url = format!("{root}/graph/social");
+        let statements = ["MATCH (n) RETURN n;", "MATCH (a)-[:KNOWS]->(b) RETURN b;"];
+
+        let out = tdb_with_input(
+            &["--url", &url],
+            &format!("{}\n{}\n", statements[0], statements[1]),
+        );
+        assert!(out.status.success(), "{}", stderr(&out));
+        // The same as sending each by itself.
+        let separate: String = statements
+            .iter()
+            .map(|statement| stdout(&tdb(&["--url", &url, statement])))
+            .collect();
+        assert_eq!(stdout(&out), separate);
+        assert_eq!(stderr(&out), "");
+
+        let log = daemon.stop();
+        // Two statements in the shell and two on their own: three connections.
+        assert_eq!(connections(&log, "/graph/social"), 3, "{log}");
+    }
+
+    #[test]
+    fn tdb_shell_takes_the_model_from_the_first_statement_and_keeps_it() {
+        let (_dir, daemon, root) = start();
+        // GET says keyval. SELECT would say rdbms, but a session has one model.
+        let out = tdb_with_input(&["--url", &root], "GET a\nSELECT 1\n");
+        assert!(out.status.success(), "{}", stderr(&out));
+        let local = stdout(&tdb(&["--local", "-m", "keyval", "GET a"]))
+            + &stdout(&tdb(&["--local", "-m", "keyval", "SELECT 1"]));
+        assert_eq!(stdout(&out), local);
+
+        let log = daemon.stop();
+        assert_eq!(connections(&log, "/keyval/main"), 1, "{log}");
+        assert!(!log.contains("route /rdbms/"), "{log}");
+    }
+
+    #[test]
+    fn tdb_shell_model_flag_picks_the_route_before_any_statement() {
+        let (_dir, daemon, root) = start();
+        let out = tdb_with_input(&["--url", &root, "-m", "vector"], "SELECT id FROM d;\n");
+        assert!(out.status.success(), "{}", stderr(&out));
+        let log = daemon.stop();
+        assert_eq!(connections(&log, "/vector/main"), 1, "{log}");
+    }
+
+    #[test]
+    fn tdb_shell_a_statement_runs_when_it_ends_with_a_semicolon() {
+        let (_dir, daemon, root) = start();
+        let url = format!("{root}/rdbms/main");
+        // Three lines, one statement; and a second on one line.
+        let input = "SELECT a\n  FROM t\n  WHERE x = 1;\nSELECT b FROM u;\n";
+        let out = tdb_with_input(&["--url", &url], input);
+        assert!(out.status.success(), "{}", stderr(&out));
+        let one = stdout(&tdb(&["--url", &url, "SELECT a\n  FROM t\n  WHERE x = 1;"]));
+        let two = stdout(&tdb(&["--url", &url, "SELECT b FROM u;"]));
+        assert_eq!(stdout(&out), one + &two);
+        daemon.stop();
+    }
+
+    #[test]
+    fn tdb_shell_a_keyval_statement_is_a_line() {
+        let (_dir, daemon, root) = start();
+        let out = tdb_with_input(&["--url", &format!("{root}/keyval/main")], "GET a\nGET b\n");
+        assert!(out.status.success(), "{}", stderr(&out));
+        assert_eq!(
+            stdout(&out).matches("Keyword(GET)").count(),
+            2,
+            "{}",
+            stdout(&out)
+        );
+        daemon.stop();
+    }
+
+    #[test]
+    fn tdb_shell_runs_a_last_statement_that_has_no_semicolon() {
+        let (_dir, daemon, root) = start();
+        let url = format!("{root}/rdbms/main");
+        let out = tdb_with_input(&["--url", &url], "SELECT 1\n");
+        assert!(out.status.success(), "{}", stderr(&out));
+        let alone = stdout(&tdb(&["--url", &url, "SELECT 1"]));
+        assert_eq!(stdout(&out), alone);
+        assert!(alone.contains("Keyword(SELECT)"), "{alone}");
+        daemon.stop();
+    }
+
+    #[test]
+    fn tdb_shell_stops_at_the_first_failure_when_input_is_not_a_terminal() {
+        let (_dir, daemon, root) = start();
+        let url = format!("{root}/keyval/main");
+        let out = tdb_with_input(&["--url", &url], "GET a\nSET k \"unterminated\nGET b\n");
+        assert_eq!(out.status.code(), Some(1));
+        let err = stderr(&out);
+        assert!(err.contains("unterminated string"), "{err}");
+        assert!(err.contains("1:7"), "{err}");
+        // What ran before the failure was printed; what came after did not.
+        let text = stdout(&out);
+        assert_eq!(text.matches("Keyword(GET)").count(), 1, "{text}");
+        assert!(!text.contains("Keyword(SET)"), "{text}");
+        // And the server is fine.
+        let ok = tdb(&["--url", &url, "GET k"]);
+        assert!(ok.status.success(), "{}", stderr(&ok));
+        daemon.stop();
+    }
+
+    #[test]
+    fn tdb_shell_use_switches_the_route_and_reconnects() {
+        let (_dir, daemon, root) = start();
+        let input =
+            "GET a\n\\use /graph/social\nMATCH (n) RETURN n;\n\\use /vector/docs;\nSELECT 1;\n";
+        let out = tdb_with_input(&["--url", &root], input);
+        assert!(out.status.success(), "{}", stderr(&out));
+        let text = stdout(&out);
+        assert!(text.contains("Keyword(GET)"), "{text}");
+        assert!(text.contains("Keyword(MATCH)"), "{text}");
+
+        let log = daemon.stop();
+        for route in ["/keyval/main", "/graph/social", "/vector/docs"] {
+            assert_eq!(connections(&log, route), 1, "{route}: {log}");
+        }
+    }
+
+    #[test]
+    fn tdb_shell_use_rejects_a_route_that_is_not_one() {
+        let (_dir, daemon, root) = start();
+        for (route, expect) in [
+            ("", "not a route"),
+            ("graph", "not a route"),
+            ("/nosql/x", "nosql"),
+            ("/graph", "database"),
+            ("/graph/a.b", "database name"),
+        ] {
+            let out = tdb_with_input(&["--url", &root], &format!("\\use {route}\n"));
+            assert_eq!(out.status.code(), Some(1), "{route:?}");
+            let err = stderr(&out);
+            assert!(err.contains(expect), "{route:?}: {err}");
+        }
+        daemon.stop();
+    }
+
+    #[test]
+    fn tdb_shell_reports_a_connection_that_is_refused() {
+        let port = TcpListener::bind("127.0.0.1:0")
+            .unwrap()
+            .local_addr()
+            .unwrap()
+            .port();
+        let out = tdb_with_input(
+            &["--url", &format!("tdb://127.0.0.1:{port}/keyval/main")],
+            "GET x\n",
+        );
+        assert_eq!(out.status.code(), Some(1));
+        let err = stderr(&out);
+        assert!(
+            err.contains(&format!("connecting to 127.0.0.1:{port}")),
+            "{err}"
+        );
+        assert!(err.contains("is tdbd running"), "{err}");
+    }
+
+    #[test]
+    fn tdb_shell_reports_a_server_that_hangs_up_without_replying() {
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let port = listener.local_addr().unwrap().port();
+        let server = thread::spawn(move || {
+            let (mut stream, _) = listener.accept().unwrap();
+            let mut buf = [0u8; 64];
+            let _ = stream.read(&mut buf);
+        });
+        let out = tdb_with_input(
+            &["--url", &format!("tdb://127.0.0.1:{port}/keyval/main")],
+            "GET x\n",
+        );
+        server.join().unwrap();
+        assert_eq!(out.status.code(), Some(1));
+        assert!(
+            stderr(&out).contains("closed the connection"),
+            "{}",
+            stderr(&out)
+        );
+    }
+
+    #[test]
+    fn tdb_shell_a_statement_over_the_limit_is_refused_by_the_server() {
+        let (_dir, daemon, root) = start();
+        let long = format!("GET {};", "x".repeat(tdb_protocol::MAX_STATEMENT_LEN));
+        let out = tdb_with_input(
+            &["--url", &format!("{root}/keyval/main")],
+            &format!("{long}\n"),
+        );
+        assert_eq!(out.status.code(), Some(1));
+        assert!(stderr(&out).contains("limit"), "{}", stderr(&out));
+        daemon.stop();
     }
 }
