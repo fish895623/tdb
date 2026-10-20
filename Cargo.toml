@@ -19,6 +19,7 @@ tdb-config = { path = "crates/tdb-config" }
 tdb-lexer = { path = "crates/tdb-lexer" }
 
 log = "0.4"
+logos = "0.16"
 serde = { version = "1", features = ["derive"] }
 toml = "1"
 env_logger = "0.11"

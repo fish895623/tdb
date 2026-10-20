@@ -43,7 +43,7 @@ One Cargo workspace, one crate per concern, dependencies pointing downward
 | Crate | Layer |
 |---|---|
 | `tdb-core` | L0–L1 and the table model (v1 engine) |
-| `tdb-lexer` | command-language front end (grows into the KV/query parser) |
+| `tdb-lexer` | command-language front end for all four models (DD-003); a parser comes next |
 | `tdb-config` | settings |
 | `tdb-cli` | the `tdb` and `tdbd` programs |
 

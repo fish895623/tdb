@@ -11,7 +11,7 @@ paths:
 | --- | --- | --- |
 | `tdb-core` | the engine: `types`, `record`, `table`, `db`, `error` | `log` |
 | `tdb-config` | settings read from `config.toml` | `log`, `serde`, `toml` |
-| `tdb-lexer` | lexer for the key-value command language | nothing |
+| `tdb-lexer` | lexer for the four-model command language (`docs/dd-003-query-lexer.md`) | `logos` |
 | `tdb-cli` | the `tdb` and `tdbd` programs | the three above, `env_logger`, `anyhow` |
 
 - Crates live in `crates/<name>/` and are listed in the root `Cargo.toml`
@@ -31,9 +31,9 @@ paths:
 ## Dependencies
 - Third-party versions live once, in the root `[workspace.dependencies]`;
   crates use `name.workspace = true`.
-- `cargo tree -p tdb-core -e normal` must show only `log`, and `tdb-lexer` must
-  have no dependencies. Anything heavier belongs in its own crate, not behind a
-  feature of the engine.
+- `cargo tree -p tdb-core -e normal` must show only `log`, and `tdb-lexer` only
+  `logos`. Anything heavier belongs in its own crate, not behind a feature of
+  the engine.
 
 ## Safety
 - The root `[workspace.lints.rust] unsafe_code = "forbid"` covers every crate.

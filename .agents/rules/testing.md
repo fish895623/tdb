@@ -10,7 +10,11 @@ paths:
 - Integration tests live in each crate's `tests/`, one file per module, and use
   only that crate's public API:
   - `tdb-core`: `types.rs`, `record.rs`, `table.rs`, `db.rs`
-  - `tdb-lexer`: `kv_lexer.rs`
+  - `tdb-lexer`: one file per model plus shared behaviour: `kv.rs`, `table.rs`,
+    `vector.rs`, `graph.rs`, `common.rs`, `keywords.rs`, and `models.rs` (the
+    per-model entry point). Write them against
+    `docs/dd-003-query-lexer.md`; when the lexer changes, change the spec and
+    its tests in the same commit
   - `tdb-config`: `config.rs` (parsing and validation)
   - `tdb-cli`: `smoke.rs` runs `tdbd` end to end and clears `RUST_LOG` and
     `TDB_CONFIG` so results don't depend on the developer's shell
