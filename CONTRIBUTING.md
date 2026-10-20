@@ -9,8 +9,8 @@ So **outside contributions can only be accepted after a Contributor License
 Agreement (CLA) is signed.** The CLA is not set up yet. Please open an issue to
 discuss a change first; do not send a pull request until it is.
 
-Before sending anything, read `.agents/rules/` (Cargo layout, testing, style)
-and run:
+Use the issue and pull request templates in `.github/`. Before sending
+anything, read `.agents/rules/` (Cargo layout, testing, style) and run:
 
 ```sh
 cargo fmt --check

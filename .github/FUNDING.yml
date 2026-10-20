@@ -1,0 +1,9 @@
+# Shown as the "Sponsor" button on the repository.
+#
+# Uncomment `github` once GitHub Sponsors is set up for the account; GitHub
+# rejects a username that is not enrolled. Other platforms (ko_fi, patreon,
+# open_collective, ...) take the same form: `platform: username`.
+# github: [fish895623]
+
+custom:
+  - https://github.com/fish895623/tdb/blob/master/LICENSE-COMMERCIAL.md

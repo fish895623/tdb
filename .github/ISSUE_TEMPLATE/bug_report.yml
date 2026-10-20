@@ -1,0 +1,70 @@
+name: Bug report
+description: Something does not work as documented
+title: "[bug] "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for the report. If this is a **security vulnerability**, do not
+        file it here; use the private link on the issue chooser page.
+  - type: dropdown
+    id: component
+    attributes:
+      label: Component
+      options:
+        - tdb-core (engine, database file)
+        - tdb-lexer (command language)
+        - tdb-config (config.toml)
+        - tdb-cli (tdb, tdbd)
+        - docs
+    validations:
+      required: true
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened
+      description: What you did, what you expected, and what you got instead.
+    validations:
+      required: true
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Minimal reproduction
+      description: >
+        The smallest input that shows it. For the lexer, include the exact text
+        and which model (`Lexer::new`, or `Lexer::for_model` with Keyval, Rdbms,
+        Vector or Graph). For the engine, a short Rust snippet or a hex dump of
+        the file.
+      render: text
+    validations:
+      required: true
+  - type: textarea
+    id: output
+    attributes:
+      label: Output or error
+      description: Error messages, panics (with `RUST_BACKTRACE=1`), or wrong tokens.
+      render: text
+  - type: input
+    id: version
+    attributes:
+      label: tdb version or commit
+      placeholder: "git rev-parse --short HEAD"
+    validations:
+      required: true
+  - type: input
+    id: environment
+    attributes:
+      label: Rust version and OS
+      placeholder: "rustc --version; uname -a"
+    validations:
+      required: true
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Before submitting
+      options:
+        - label: I searched existing issues and this is not a duplicate.
+          required: true
+        - label: This is not a security vulnerability.
+          required: true

@@ -1,0 +1,59 @@
+name: Feature request
+description: Suggest an improvement or a new capability
+title: "[feature] "
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Check the roadmap in `docs/goal.md` and the design docs first; the
+        feature may already be planned. Agreeing on scope here before writing
+        code avoids a pull request being turned down.
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options:
+        - Key-value (Redis-style)
+        - Relational / ORM
+        - Vector
+        - Graph
+        - Storage core (pages, B+tree, transactions)
+        - Command language / lexer / parser
+        - Server and routing
+        - Configuration
+        - Tooling or docs
+    validations:
+      required: true
+  - type: textarea
+    id: problem
+    attributes:
+      label: The problem
+      description: What you are trying to do and why you cannot today.
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed solution
+      description: The behaviour you would like, with an example if you can.
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+  - type: dropdown
+    id: contribute
+    attributes:
+      label: Would you send a pull request for this?
+      description: >
+        Outside pull requests need the contributor agreement in CONTRIBUTING.md.
+        A qualifying pull request also counts toward the commercial license
+        (see LICENSE-COMMERCIAL.md).
+      options:
+        - "No"
+        - "Yes"
+        - "Yes, as part of a commercial license"
+    validations:
+      required: true
