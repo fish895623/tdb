@@ -1,0 +1,15 @@
+[package]
+name = "tdb-protocol"
+description = "The tdb wire protocol: routes, endpoints and frames"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+tdb-lexer.workspace = true
+
+[lints]
+workspace = true

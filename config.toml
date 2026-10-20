@@ -8,6 +8,11 @@ path = "tdatabase.db"
 # off | error | warn | info | debug | trace. The RUST_LOG variable overrides it.
 level = "trace"
 
+[server]
+# Where tdbd accepts tdb:// connections (docs/dd-005-wire-protocol.md). Loopback
+# only by default: there is no authentication yet. Port 0 picks a free port.
+listen = "127.0.0.1:7878"
+
 [storage]
 # Reserved: takes effect when the page store lands (docs/dd-001-large-index.md).
 page_size = 16384      # bytes; a power of two from 4096 to 65536

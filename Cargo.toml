@@ -4,6 +4,8 @@ members = [
     "crates/tdb-core",
     "crates/tdb-config",
     "crates/tdb-lexer",
+    "crates/tdb-protocol",
+    "crates/tdb-server",
     "crates/tdb-cli",
 ]
 
@@ -19,9 +21,13 @@ repository = "https://github.com/fish895623/tdb"
 tdb-core = { path = "crates/tdb-core" }
 tdb-config = { path = "crates/tdb-config" }
 tdb-lexer = { path = "crates/tdb-lexer" }
+tdb-protocol = { path = "crates/tdb-protocol" }
+tdb-server = { path = "crates/tdb-server" }
 
 log = "0.4"
 logos = "0.16"
+clap = { version = "4", features = ["derive"] }
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "signal", "net", "io-util", "sync", "time"] }
 serde = { version = "1", features = ["derive"] }
 toml = "1"
 env_logger = "0.11"

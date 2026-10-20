@@ -1,7 +1,8 @@
 # DD-004: Endpoint Routing
 
-**Status.** Proposal, written from the plan below. The open questions at the
-end need answers before any of this is built.
+**Status.** Route parsing and the listener are built (`tdb-protocol`,
+`tdb-server`), over the wire protocol chosen in DD-005. Open question 1 is
+answered; 2 to 4 are still open.
 
 ## The plan
 
@@ -15,11 +16,12 @@ to and **which database** inside that model:
 <scheme>://<host>[:<port>]/graph/<database>    graph
 ```
 
-`<scheme>` is a placeholder for the wire protocol (see open question 1).
+`<scheme>` is `tdb`, a custom binary protocol (DD-005). The route travels in the
+first frame of the connection instead of an HTTP-style request line.
 
 ## Route parsing
 
-A `Route` is `(Model, database)`:
+A `Route` is `(Model, database)` (`tdb_protocol::Route`):
 
 - Exactly two path segments. The first is one of `keyval`, `rdbms`, `vector`,
   `graph`; anything else is an unknown-model error.
@@ -65,18 +67,19 @@ property that justified binding the models into one engine in the first place.
 
 ## Crates
 
-- `tdb-server`: listener, `Route` parsing, one handler per model. It depends on
-  `tdb-core`, `tdb-lexer` and `tdb-config`.
-- Settings (`tdb-config`) gain a `[server]` section: listen address, data
-  directory, and the allowed models.
+- `tdb-protocol`: `Route`, `Endpoint` (the `tdb://` URL) and the frame codec
+  (DD-005). It depends only on `tdb-lexer`.
+- `tdb-server`: the listener and the connection state machine. It depends on
+  `tdb-protocol`, `tdb-lexer` and tokio; it will gain `tdb-core` and one handler
+  per model when statements are executed, not just lexed.
+- Settings (`tdb-config`) have a `[server]` section with `listen`. The data
+  directory and the allowed models are still to come.
 
 ## Open questions
 
-1. **Wire protocol.** What is `<scheme>`? For `keyval`, true Redis clients speak
-   RESP, which is length-prefixed and needs no lexer at all (inline commands are
-   only for debugging). For the others a text protocol (HTTP + a body, or a
-   line protocol) is simplest. One protocol for all four, or each model speaks
-   its own?
+1. **Wire protocol.** *Answered by DD-005:* one custom binary protocol for all
+   four models, `tdb://`. A RESP listener for `keyval` stays possible as a
+   second front end (DD-002).
 2. **Vector's language.** SQL-like with distance operators
    (`ORDER BY v <-> [..] LIMIT 5`), a JSON search API, or something else? It
    decides what the vector dialect lexes.

@@ -12,8 +12,12 @@ repository.workspace = true
 tdb-core.workspace = true
 tdb-config.workspace = true
 tdb-lexer.workspace = true
+tdb-protocol.workspace = true
+tdb-server.workspace = true
 anyhow.workspace = true
+clap.workspace = true
 env_logger.workspace = true
+tokio.workspace = true
 
 [dev-dependencies]
 tempfile.workspace = true

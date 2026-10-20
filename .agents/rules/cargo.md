@@ -12,7 +12,9 @@ paths:
 | `tdb-core` | the engine: `types`, `record`, `table`, `db`, `error` | `log` |
 | `tdb-config` | settings read from `config.toml` | `log`, `serde`, `toml` |
 | `tdb-lexer` | lexer for the four-model command language (`docs/dd-003-query-lexer.md`) | `logos` |
-| `tdb-cli` | the `tdb` and `tdbd` programs | the three above, `env_logger`, `anyhow` |
+| `tdb-protocol` | the wire protocol: routes, `tdb://` endpoints, frames (`docs/dd-005-wire-protocol.md`) | `tdb-lexer` |
+| `tdb-server` | the listener and connection handling | `tdb-protocol`, `tdb-lexer`, `log`, `tokio` |
+| `tdb-cli` | the `tdb` and `tdbd` programs | the crates above, `clap`, `tokio`, `env_logger`, `anyhow` |
 
 - Crates live in `crates/<name>/` and are listed in the root `Cargo.toml`
   `members`. Edition, version, `rust-version` and lints are inherited
@@ -23,6 +25,26 @@ paths:
   (`tdb.rs` -> `tdb`), found automatically. Throwaway programs go in
   `crates/tdb-cli/examples/` (they may use dev-dependencies).
 - Share code through a library crate, never between `src/bin/` files.
+- Command-line arguments are parsed with `clap` (derive) in each program, as
+  an `Args` struct with an explicit `#[command(name = "..")]`: the derived
+  name would be the package, `tdb-cli`. Parse first in `main`, so `--help`,
+  `--version` and a usage error (exit status 2) never touch the database. A
+  type from a crate that must not depend on `clap` (`tdb_lexer::Model`) gets
+  a local `ValueEnum` mirror in the program.
+- `tdbd` is a long-running process on a `tokio` runtime, built by hand in
+  `main` after the arguments, settings and logger (not `#[tokio::main]`). It
+  stays up until SIGINT or SIGTERM, then flushes and exits 0; `--once` runs
+  the startup step and exits. Register the signal listeners before opening
+  the database, and run the engine's blocking file I/O through
+  `spawn_blocking`, never on a worker thread. Only `tdb-cli` (and the future
+  `tdb-server`) may depend on `tokio`; the engine and lexer stay
+  runtime-free. `tdb-protocol` has no sockets and no runtime either, so the
+  clients and the server share it; the blocking `tdb` client uses `std::net`.
+- The wire format is `docs/dd-005-wire-protocol.md`. Everything a peer sends
+  is untrusted: check a length against its limit before reading or
+  allocating, return a `ProtocolError`, never panic. Change the spec and its
+  tests in the same commit as the code, and bump `VERSION` for a change an
+  old peer could misread.
 - A new crate: add `crates/<name>/`, list it in `members`, add a `path` entry
   to `[workspace.dependencies]`, and set `[lints] workspace = true`. The planned
   crates (`tdb-derive`, `tdb-server`, one per model) are in
@@ -56,6 +78,13 @@ paths:
   index unchecked, or trust a length field for an allocation size.
 - Use `?` and `Result`; no `unwrap()`/`expect()` in library `src/` outside
   tests.
+- Stack depth must not depend on input. In `tdb-lexer`'s `logos` patterns, do
+  not repeat a class that matches non-ASCII text (`\S*`, `\s+`, `[^\n]*`, `.*`):
+  the generated code recurses once per character, and a debug build, which has
+  no tail calls, overflows the stack on a long run. That would abort a whole
+  `tdbd` from one statement. Match a short head with the pattern and loop over
+  the rest in a callback (see `bump_while` in `raw.rs`). ASCII-only classes are
+  fine. A new pattern gets a 200,000-character test in `tests/common.rs`.
 
 ## Settings
 - Settings live in `tdb-config` (`Config`) and are documented, with their
@@ -65,7 +94,11 @@ paths:
   line in `config.toml`, and tests for good and bad values. Unknown keys are
   rejected (`deny_unknown_fields`), so a typo is an error.
 - Lookup order in `tdbd`: `--config <path>`, `$TDB_CONFIG`, `./config.toml`,
-  then built-in defaults. `RUST_LOG` overrides `log.level`.
+  then built-in defaults. `RUST_LOG` overrides `log.level`, and
+  `--listen <addr>` overrides `server.listen`.
+- `server.listen` defaults to loopback (there is no authentication yet). Its
+  port, `tdb_config::DEFAULT_LISTEN_PORT`, equals `tdb_protocol::DEFAULT_PORT`;
+  a `tdb-cli` test keeps them equal, so change both together.
 - Log targets are crate names (`tdb_core::db`), so `RUST_LOG=tdb_core=trace`.
 
 ## Verify before committing
