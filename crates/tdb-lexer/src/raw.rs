@@ -1,7 +1,7 @@
 //! The `logos` token definitions. Each enum is a DFA over one kind of text;
 //! `lexer.rs` turns their output into public `Token`s.
 
-use logos::{Lexer, Logos};
+use logos::{Lexer, Logos, Skip};
 
 use crate::token::TokenType;
 
@@ -68,11 +68,48 @@ fn read_string<'s, T: Logos<'s, Source = str>>(
     fail("unterminated string", 0)
 }
 
+// Runs of Unicode text are consumed by callbacks, not by regex repetition:
+// logos compiles `\S*`, `\s+` and `[^\n]*` over multi-byte characters to code
+// that recurses once per character, and without the optimizer's tail calls (a
+// debug build) a long enough run overflows the stack. The input may come from
+// the network, so a run's length must never decide how deep the stack gets. A
+// regex matches the first character and the callback loops over the rest.
+
+/// Extend the current token over the following characters while `keep` holds.
+fn bump_while<'s, T: Logos<'s, Source = str>>(lex: &mut Lexer<'s, T>, keep: impl Fn(char) -> bool) {
+    let rest = lex.remainder();
+    let len = rest.find(|c| !keep(c)).unwrap_or(rest.len());
+    lex.bump(len);
+}
+
+/// Whitespace: the first character is matched, this takes the run after it.
+fn skip_whitespace(lex: &mut Lexer<Normal>) -> Skip {
+    bump_while(lex, char::is_whitespace);
+    Skip
+}
+
+/// A `//` comment runs to the end of the line; the `//` is already consumed.
+fn skip_line_comment(lex: &mut Lexer<Normal>) -> Skip {
+    bump_while(lex, |c| c != '\n');
+    Skip
+}
+
+/// Whitespace other than the newline, which KV mode keeps as a token.
+fn skip_blanks(lex: &mut Lexer<Kv>) -> Skip {
+    bump_while(lex, |c| c.is_whitespace() && c != '\n');
+    Skip
+}
+
+/// A bare KV word: the first character is matched, this takes the rest.
+fn read_kv_word(lex: &mut Lexer<Kv>) {
+    bump_while(lex, |c| !c.is_whitespace());
+}
+
 /// Normal mode: relational, vector and graph statements.
 #[derive(Logos, Debug, Clone, PartialEq)]
 #[logos(error = RawError)]
-#[logos(skip r"\s+")]
-#[logos(skip(r"//[^\n]*", allow_greedy = true))]
+#[logos(skip(r"\s", skip_whitespace))]
+#[logos(skip("//", skip_line_comment))]
 pub(crate) enum Normal {
     #[regex(r"[A-Za-z_][A-Za-z0-9_]*")]
     Word,
@@ -188,13 +225,13 @@ fn read_block_comment(lex: &mut Lexer<Normal>) -> Result<(), RawError> {
 /// KV mode: one Redis-style command per line, arguments are bare words.
 #[derive(Logos, Debug, Clone, PartialEq)]
 #[logos(error = RawError)]
-#[logos(skip r"[\s&&[^\n]]+")]
+#[logos(skip(r"[\s&&[^\n]]", skip_blanks))]
 pub(crate) enum Kv {
     #[token("\n")]
     Newline,
 
     /// A run of non-whitespace not starting with a quote.
-    #[regex(r#"[^\s"']\S*"#)]
+    #[regex(r#"[^\s"']"#, read_kv_word)]
     Word,
 
     #[token("'", |lex| read_kv_string(lex, '\''))]

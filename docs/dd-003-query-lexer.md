@@ -174,7 +174,8 @@ All are `LexError { message, line, column }`, displayed as `message at L:C`.
 | `invalid number '12a'` (number text plus the offending character) | the number's start |
 | `expected whitespace after a quoted argument` (KV mode) | the offending character |
 
-The lexer never panics, on any input.
+The lexer never panics, on any input, and a long input never exhausts the stack
+(see "Details the tests pin").
 
 ## Details the tests pin
 
@@ -185,6 +186,12 @@ The lexer never panics, on any input.
   `\n` counts a line.
 - A quoted KV argument may span lines (`GET "a\nb"` is one argument), because
   the statement ends at the first newline *outside* a quoted argument.
+- A run of characters of any length (a word, a run of whitespace, a `//`
+  comment) is lexed in constant stack. The regex engine behind the lexer
+  recurses once per character over multi-byte text when it is not optimized (a
+  debug build), so these runs are matched by a short pattern plus a loop, and a
+  test lexes 200,000-character runs. Statements come from the network, so this
+  is about not letting a peer abort the server.
 - `::`, `||`, `**`, `++` and `;;` are not tokens; they split into their
   single-character tokens.
 - For a number followed by a letter, the message shows the number text plus that
