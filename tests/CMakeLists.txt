@@ -26,3 +26,7 @@ endif()
 
 include(GoogleTest)
 gtest_discover_tests(tdb_tests DISCOVERY_MODE PRE_TEST)
+
+add_test(NAME tdb_smoke_test COMMAND tdb)
+set_tests_properties(tdb_smoke_test PROPERTIES
+  PASS_REGULAR_EXPRESSION "Hello, World!")
