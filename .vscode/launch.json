@@ -2,13 +2,26 @@
   "version": "0.2.0",
   "configurations": [
     {
-      "name": "CMake: debug",
+      "name": "tdbd",
       "type": "lldb",
       "request": "launch",
-      "program": "${command:cmake.launchTargetPath}",
+      "cargo": {
+        "args": ["build", "--bin=tdbd"],
+        "filter": { "name": "tdbd", "kind": "bin" }
+      },
       "args": [],
-      "cwd": "${workspaceFolder}/build/debug",
-      "preLaunchTask": "CMake: build (debug)"
+      "cwd": "${workspaceFolder}"
+    },
+    {
+      "name": "tdb",
+      "type": "lldb",
+      "request": "launch",
+      "cargo": {
+        "args": ["build", "--bin=tdb"],
+        "filter": { "name": "tdb", "kind": "bin" }
+      },
+      "args": [],
+      "cwd": "${workspaceFolder}"
     }
   ]
 }

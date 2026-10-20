@@ -1,28 +1,27 @@
 ---
 paths:
-  - "include/tdb/**"
-  - "bin/**"
+  - "src/**"
   - "tests/**"
-  - ".clang-tidy"
+  - "examples/**"
+  - "Cargo.toml"
 ---
 
 # Style rules
 
-Google C++ naming, enforced by `readability-identifier-naming` in
-`.clang-tidy`. Check with `clang-tidy -p build/debug bin/*.cpp tests/*.cpp`.
+Standard Rust style and naming (the Rust API Guidelines). `cargo fmt` formats,
+`cargo clippy` lints, and rustc's own `non_snake_case` / `non_camel_case_types`
+lints enforce naming.
 
 | What | Style | Example |
 | --- | --- | --- |
-| Namespace | `lower_case` | `tdb` |
-| Class, struct, enum, alias | `CamelCase` | `Database`, `FieldType` |
-| Function, method (accessors too) | `CamelCase` | `GetTable()`, `Bytes()` |
-| Variable, parameter | `lower_case` | `schema`, `values` |
-| Struct data member | `lower_case` | `field.name` |
-| Class private member | `lower_case_` | `path_`, `tables_` |
-| Enumerator | `kCamelCase` | `FieldType::kInt64` |
-| `constexpr` / global / static const | `kCamelCase` | `kMaxNameLen` |
-| Macro, include guard | `UPPER_CASE` | `TDB_KV_LEXER_H` |
-| File | `snake_case` | `kv_lexer.h` |
+| Crate, module, file | `snake_case` | `kv_lexer` |
+| Type, trait, enum, variant | `CamelCase` | `Database`, `FieldType::Int64` |
+| Function, method, variable, field | `snake_case` | `get_table()`, `path` |
+| Constant, static | `SCREAMING_SNAKE_CASE` | `MAX_NAME_LEN` |
+| Getter | the bare name, no `get_` | `name()`, `bytes()` |
 
-- Do not add a check to `.clang-tidy` to silence a naming warning; rename.
-- Accessors are `CamelCase` like every other method, not `bytes()`.
+- Getters drop the `get_` prefix (`Table::name()`). Lookups that can fail keep
+  it where it reads naturally (`Database::get_table`, `Record::get`).
+- Fallible functions return `Result<_, Error>`; "not found" is `Option`.
+- Run `cargo fmt` before every commit; do not hand-format.
+- Do not silence a lint with `#[allow(...)]` to dodge a rename or a fix.

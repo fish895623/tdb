@@ -1,7 +1,6 @@
-build/
-CMakeFiles/
-tdatabase.db
+/target
 .cache/
+tdatabase.db
 testing_file.txt
 .env*
 .idea/

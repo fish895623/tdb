@@ -1,6 +1,6 @@
 # tdb — Project Goal
 
-`tdb` is an embedded, file-based database engine written in C++23.
+`tdb` is an embedded, file-based database engine written in Rust.
 It is built from scratch: no SQLite, no external storage dependencies.
 
 ## Purpose
@@ -8,7 +8,8 @@ It is built from scratch: no SQLite, no external storage dependencies.
 - Provide a small, readable, correctness-first storage engine
 - Support tables with fixed-width typed columns (v1: Bool, Int32, Int64, Float32, Float64)
 - Persist data in a single, self-describing file (`tdatabase.db`)
-- Be embeddable: header-only API, one library to link
+- Be embeddable: one library crate, no required runtime dependencies beyond
+  the `log` facade
 
 ## Core Design Principles
 
@@ -17,7 +18,11 @@ It is built from scratch: no SQLite, no external storage dependencies.
 2. **RAM is a cache, not the storage.** The engine must run on small
    machines (e.g. 16GB RAM) while managing data sets far larger than RAM
    (see `dd-001-large-index.md`).
-3. **Grow in stages.** v1 ships fixed-width records, append-only tables,
+3. **Safe by construction.** The engine is safe Rust only
+   (`unsafe_code = "forbid"`). Bytes from disk are untrusted: truncated or
+   malformed files, lying length fields and bad UTF-8 come back as errors,
+   never as panics, undefined behavior, or silently zeroed data.
+4. **Grow in stages.** v1 ships fixed-width records, append-only tables,
    linear scans. Indexes, variable-length types, delete/update, WAL, and a
    SQL layer are incremental milestones.
 
@@ -50,7 +55,7 @@ contract:
 front-ends (one contract, three consumers):
 1. **IntelliJ plugin** (Kotlin): custom tool window + completion.
    - schema completion: table/column names in queries and in
-     C++ API calls like `db.GetTable("…")`
+     Rust API calls like `db.get_table("…")`
    - read-only data browser (from schema JSON)
    - query console (shells out to the `tdb` CLI)
    - deliberately the *lightweight* tier: own tool window, NOT the
@@ -60,7 +65,7 @@ front-ends (one contract, three consumers):
 2. **LSP server**: completion for both VS Code and IntelliJ (JetBrains
    LSP client, 2023.3+) from one implementation — candidate for
    replacing/duplicating the plugin later.
-3. **VS Code**: today covered by clangd + generated schema header;
+3. **VS Code**: today covered by rust-analyzer + generated schema types;
    later the LSP server.
 
 ## Roadmap
@@ -69,7 +74,7 @@ front-ends (one contract, three consumers):
    sized for "index > RAM" workloads (100GB index on 16GB host).
 2. Variable-length records (text) with in-page / overflow-page layout.
 3. Delete/update semantics + write-ahead log for crash durability.
-4. Simple SQL parser over the C++ API.
+4. Simple SQL parser over the Rust API.
 5. Schema JSON export (`tdb.schema.json`) + `tdb` CLI — the IDE contract.
 6. IntelliJ plugin (lightweight tier): schema completion, data browser,
    query console. (dd-002, pending)

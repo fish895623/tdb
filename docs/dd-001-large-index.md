@@ -49,10 +49,13 @@ index is. RAM is used as a **page cache**, not as index storage.
 
 ### 4. OS page cache as second layer
 
-- Use buffered `read()`/`write()` (or `mmap` + `MADV_WILLNEED`) so the
-  kernel caches recently touched pages even if our pool evicts them.
+- Use buffered positioned reads/writes (`std::os::unix::fs::FileExt`
+  `read_at`/`write_at`) so the kernel caches recently touched pages even if
+  our pool evicts them. No `mmap`: it needs `unsafe`, and a file truncated by
+  another process turns a safe-looking read into a SIGBUS.
 - Sequential scans: `posix_fadvise(POSIX_FADV_SEQUENTIAL)` so the kernel
-  pre-reads and discards ahead of us.
+  pre-reads and discards ahead of us (a libc call; if used, isolate it in one
+  small audited module rather than lifting the `unsafe` ban).
 - Preallocate index/data files with `fallocate()` to avoid fragmentation.
 
 ### 5. Scans
