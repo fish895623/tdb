@@ -11,7 +11,7 @@ paths:
   etc.). Add new files to the `tdb_tests` source list in
   `tests/CMakeLists.txt`.
 - Register cases with `gtest_discover_tests`. Do not `add_test` per case.
-  Non-GoogleTest checks (e.g. the `tdb_smoke_test` of the executable) go in
+  Non-GoogleTest checks (e.g. the `tdbd_smoke_test` of the executable) go in
   the same file with `add_test`.
 - Tests that touch disk use a per-test temp file and delete it in `TearDown`.
   Never write into the source tree.

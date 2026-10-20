@@ -9,9 +9,9 @@ paths:
 # CMake rules
 
 ## Keep the root `CMakeLists.txt` minimal
-- The root file only: sets the project and C++ standard, includes
-  `cmake/Executables.cmake`, adds `tests/` under `BUILD_TESTING`, and includes
-  optional feature modules. Target ~20 lines.
+- The root file only: sets the project and C++ standard, adds `bin/`, adds
+  `tests/` under `BUILD_TESTING`, and includes optional feature modules.
+  Target ~20 lines.
 - Do not inline feature logic there. Put it in `cmake/<Feature>.cmake` and
   `include()` it behind an `option()`. Test setup lives in
   `tests/CMakeLists.txt`.
@@ -20,15 +20,17 @@ paths:
 - Wrap lines at 80 columns, indent 2 spaces, keep comments short and about
   *why* (not what).
 
-## Executables (`cmake/Executables.cmake`)
+## Executables (`bin/CMakeLists.txt`)
 - Every `bin/*.cpp` becomes its own executable, named after the file
   (`bin/tdb.cpp` -> `tdb`), like Rust's `src/bin/`. To add a program, drop a
   `.cpp` with its own `main()` in `bin/`; no CMake edit needed (the glob uses
   `CONFIGURE_DEPENDS`).
 - Only `bin/` files get executables. Shared code goes in `include/tdb/`, never
   in a `bin/` file, since each one is a standalone program.
-- The module sets `TDB_BIN_TARGETS`; `Coverage.cmake` instruments that list.
-- Keep `bin/tdb.cpp`: the `tdb_smoke_test` runs the `tdb` target.
+- `bin/CMakeLists.txt` sets `TDB_BIN_TARGETS` in the parent scope;
+  `Coverage.cmake` instruments that list, so `add_subdirectory(bin)` must come
+  before it. Binaries land in `<build>/bin/`.
+- Keep `bin/tdbd.cpp`: the `tdbd_smoke_test` runs the `tdbd` target.
 
 ## Coverage (`cmake/Coverage.cmake`)
 - The engine is header-only, so coverage comes from `tdb_tests`.
