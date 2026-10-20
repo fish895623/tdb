@@ -107,7 +107,7 @@ TEST(RecordLayoutTest, ByteSizeMatchesRecordSize) {
                                {"c", FieldType::kFloat32}};
   double vals[3] = {1, 1, 1};
   Record r = Record::FromValues(schema, vals);
-  EXPECT_EQ(r.bytes().size(), Record::RecordSize(schema));
+  EXPECT_EQ(r.Bytes().size(), Record::RecordSize(schema));
 }
 
 TEST(RecordLayoutTest, IntegersAreLittleEndianTwosComplement) {
@@ -115,7 +115,7 @@ TEST(RecordLayoutTest, IntegersAreLittleEndianTwosComplement) {
                                {"i64", FieldType::kInt64}};
   double vals[2] = {-2, 258};  // 258 = 0x0102
   Record r = Record::FromValues(schema, vals);
-  EXPECT_EQ(r.bytes(), Bytes({0xFE, 0xFF, 0xFF, 0xFF,  //
+  EXPECT_EQ(r.Bytes(), Bytes({0xFE, 0xFF, 0xFF, 0xFF,  //
                               0x02, 0x01, 0, 0, 0, 0, 0, 0}));
 }
 
@@ -123,20 +123,20 @@ TEST(RecordLayoutTest, BoolIsSingleByte) {
   std::vector<Field> schema = {{"a", FieldType::kBool},
                                {"b", FieldType::kBool}};
   double vals[2] = {1, 0};
-  EXPECT_EQ(Record::FromValues(schema, vals).bytes(), Bytes({1, 0}));
+  EXPECT_EQ(Record::FromValues(schema, vals).Bytes(), Bytes({1, 0}));
 }
 
 TEST(RecordLayoutTest, Float32UsesIeee754LittleEndian) {
   std::vector<Field> schema = {{"f", FieldType::kFloat32}};
   double vals[1] = {1.0};  // 0x3F800000
-  EXPECT_EQ(Record::FromValues(schema, vals).bytes(),
+  EXPECT_EQ(Record::FromValues(schema, vals).Bytes(),
             Bytes({0x00, 0x00, 0x80, 0x3F}));
 }
 
 TEST(RecordLayoutTest, Float64UsesIeee754LittleEndian) {
   std::vector<Field> schema = {{"f", FieldType::kFloat64}};
   double vals[1] = {1.0};  // 0x3FF0000000000000
-  EXPECT_EQ(Record::FromValues(schema, vals).bytes(),
+  EXPECT_EQ(Record::FromValues(schema, vals).Bytes(),
             Bytes({0, 0, 0, 0, 0, 0, 0xF0, 0x3F}));
 }
 
@@ -157,7 +157,7 @@ TEST(RecordTest, MixedSchemaReadsEachFieldAtItsOffset) {
 
 TEST(RecordTest, EmptySchemaYieldsEmptyRecord) {
   Record r = Record::FromValues({}, {});
-  EXPECT_TRUE(r.bytes().empty());
+  EXPECT_TRUE(r.Bytes().empty());
 }
 
 TEST(RecordTest, TooFewValuesThrows) {
@@ -190,7 +190,7 @@ TEST(RecordTest, FromRawBytesPreservesBytesAndIsReadable) {
   std::vector<Field> schema = {{"a", FieldType::kInt32},
                                {"b", FieldType::kBool}};
   Record r = Record::FromRawBytes(Bytes({0x2A, 0, 0, 0, 1}));
-  EXPECT_EQ(r.bytes(), Bytes({0x2A, 0, 0, 0, 1}));
+  EXPECT_EQ(r.Bytes(), Bytes({0x2A, 0, 0, 0, 1}));
   EXPECT_EQ(r.Get(0, schema), 42.0);
   EXPECT_EQ(r.Get(1, schema), 1.0);
 }
@@ -200,8 +200,8 @@ TEST(RecordTest, FromRawBytesMatchesFromValues) {
                                {"b", FieldType::kFloat64}};
   double vals[2] = {99, 2.25};
   Record a = Record::FromValues(schema, vals);
-  Record b = Record::FromRawBytes(a.bytes());
-  EXPECT_EQ(a.bytes(), b.bytes());
+  Record b = Record::FromRawBytes(a.Bytes());
+  EXPECT_EQ(a.Bytes(), b.Bytes());
   EXPECT_EQ(b.Get(0, schema), 99.0);
   EXPECT_EQ(b.Get(1, schema), 2.25);
 }

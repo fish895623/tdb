@@ -126,5 +126,5 @@ TEST(TableTest, ZeroFieldTableAcceptsEmptyRecords) {
   EXPECT_EQ(t.Insert({}), 0u);
   EXPECT_EQ(t.Insert({}), 1u);
   EXPECT_EQ(t.Count(), 2u);
-  EXPECT_TRUE(t.At(0).bytes().empty());
+  EXPECT_TRUE(t.At(0).Bytes().empty());
 }

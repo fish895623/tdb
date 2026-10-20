@@ -11,7 +11,7 @@ int main() {
   spdlog::set_level(spdlog::level::trace);
   spdlog::cfg::load_env_levels();
 
-  hello();
+  Hello();
   SPDLOG_INFO("Hello, World!");
 
   Database db = Database::Open("tdatabase.db");

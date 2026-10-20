@@ -66,8 +66,8 @@ class Database {
       }
       WriteU64(f, t->Count());
       for (const auto& r : t->Records()) {
-        WriteU32(f, static_cast<uint32_t>(r.bytes().size()));
-        WriteBytes(f, r.bytes().data(), r.bytes().size());
+        WriteU32(f, static_cast<uint32_t>(r.Bytes().size()));
+        WriteBytes(f, r.Bytes().data(), r.Bytes().size());
       }
     }
   }

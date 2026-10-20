@@ -68,7 +68,7 @@ class Record {
     throw std::invalid_argument("invalid field type");
   }
 
-  const std::vector<std::byte>& bytes() const { return bytes_; }
+  const std::vector<std::byte>& Bytes() const { return bytes_; }
 
  private:
   Record() = default;
