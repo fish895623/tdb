@@ -35,10 +35,11 @@ cargo test --workspace
 cargo run --bin tdbd     # appends two records to ./tdatabase.db, then keeps
                          # running on 127.0.0.1:7878 until Ctrl-C or SIGTERM
 cargo run --bin tdbd -- --once   # the same, but exit right after
-cargo run --bin tdb      # shows how one statement per model is tokenized
-cargo run --bin tdb -- --model graph "MATCH (n) RETURN n;"   # tokenize your own
-# with tdbd running: send a statement to it over the tdb protocol
+cargo run --bin tdb      # tokenizes one built-in statement per model, here
+# with tdbd running, send it a statement over the tdb protocol:
+cargo run --bin tdb -- "MATCH (n) RETURN n;"
 cargo run --bin tdb -- --url tdb://127.0.0.1:7878/graph/social "MATCH (n) RETURN n;"
+cargo run --bin tdb -- --local "MATCH (n) RETURN n;"   # tokenize here, no server
 cargo run --bin tdbd -- --help
 ```
 

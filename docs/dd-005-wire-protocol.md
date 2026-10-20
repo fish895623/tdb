@@ -180,10 +180,19 @@ When `tdbd` is told to stop (SIGINT or SIGTERM), the server:
   `127.0.0.1:7878`), or on `--listen <ADDR>`. Port 0 picks a free port, and the
   address it got is printed on the "is running" line. **Loopback only by
   default**, because there is no authentication yet.
-- `tdb --url <URL> <STATEMENT>` sends one statement and prints the tokens, in
-  the same format as lexing locally. Without `--url` it lexes locally, as
-  before. A URL takes no credentials (`user:password@` is refused, and not
-  repeated in the error), and a port is decimal digits.
+- `tdb "<STATEMENT>"` sends one statement to the tdbd on `127.0.0.1:7878` and
+  prints the tokens, in the same format as lexing locally (`tdb --local`, which
+  needs no server). `--url` names another tdbd. It is `tdb://HOST[:PORT]`, and
+  may end in the route, `/MODEL/DATABASE`, to be explicit.
+- Without a route, `tdb` builds one. The **model** is `--model` if given, or
+  else the one the statement's first word belongs to (`GET` is `keyval`,
+  `MATCH` is `graph`, `SELECT` is `rdbms`), or `rdbms` if the word does not say
+  (a name, or a word every model has such as `CREATE`). A first word cannot tell
+  `rdbms` from `vector`, so ask for `vector` with `--model`. The **database** is
+  `main`. `--model` with a route in the URL is a usage error: it would say the
+  model twice.
+- A URL takes no credentials (`user:password@` is refused, and not repeated in
+  the error), and a port is decimal digits.
 - The default port, 7878, is in both `tdb-config` (`DEFAULT_LISTEN_PORT`) and
   `tdb-protocol` (`DEFAULT_PORT`); a test in `tdb-cli` keeps them equal.
 

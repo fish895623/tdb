@@ -47,7 +47,7 @@ fn tdb_model_flag_narrows_the_demo_to_that_model() {
 #[test]
 fn tdb_tokenizes_a_statement_given_as_an_argument() {
     // No model: it is detected from the first word.
-    let out = tdb(&["GET user:1"]);
+    let out = tdb(&["--local", "GET user:1"]);
     assert!(out.status.success(), "{}", stderr(&out));
     let text = stdout(&out);
     assert!(text.contains("Keyword(GET)"), "{text}");
@@ -58,17 +58,17 @@ fn tdb_tokenizes_a_statement_given_as_an_argument() {
 #[test]
 fn tdb_model_flag_fixes_the_dialect_of_a_statement() {
     // MATCH is a keyword in graph and an ordinary name in rdbms (DD-003).
-    let graph = stdout(&tdb(&["-m", "graph", "MATCH (n) RETURN n;"]));
+    let graph = stdout(&tdb(&["--local", "-m", "graph", "MATCH (n) RETURN n;"]));
     assert!(graph.contains("Keyword(MATCH)"), "{graph}");
 
-    let rdbms = stdout(&tdb(&["-m", "rdbms", "SELECT match FROM t;"]));
+    let rdbms = stdout(&tdb(&["--local", "-m", "rdbms", "SELECT match FROM t;"]));
     assert!(!rdbms.contains("Keyword(MATCH)"), "{rdbms}");
     assert!(rdbms.contains("Keyword(SELECT)"), "{rdbms}");
 }
 
 #[test]
 fn tdb_reports_a_lex_error_with_its_position_and_a_failing_status() {
-    let out = tdb(&["-m", "keyval", "SET k \"unterminated"]);
+    let out = tdb(&["--local", "-m", "keyval", "SET k \"unterminated"]);
     assert_eq!(out.status.code(), Some(1));
     let err = stderr(&out);
     assert!(err.contains("unterminated string"), "{err}");
@@ -119,7 +119,10 @@ fn tdb_prints_help_and_version() {
 fn tdb_help_describes_the_url_option() {
     let text = stdout(&tdb(&["--help"]));
     assert!(text.contains("--url <URL>"), "{text}");
-    assert!(text.contains("tdb://HOST[:PORT]/MODEL/DATABASE"), "{text}");
+    assert!(text.contains("tdb://HOST[:PORT]"), "{text}");
+    assert!(text.contains("/MODEL/DATABASE"), "{text}");
+    assert!(text.contains("--local"), "{text}");
+    assert!(text.contains("127.0.0.1:7878"), "{text}");
 }
 
 #[test]
@@ -134,7 +137,9 @@ fn tdb_the_default_port_is_the_one_tdbd_listens_on() {
 fn tdb_url_must_be_a_valid_tdb_url_and_is_checked_before_connecting() {
     let cases = [
         ("http://127.0.0.1:7878/keyval/main", "tdb://"),
-        ("tdb://127.0.0.1:7878", "path"),
+        ("tdb://", "host"),
+        ("tdb://127.0.0.1:99999", "port"),
+        ("tdb://user:pw@127.0.0.1:7878", "credentials"),
         ("tdb://127.0.0.1:7878/nosql/main", "nosql"),
         ("tdb://127.0.0.1:7878/keyval", "database"),
         ("tdb://127.0.0.1:7878/keyval/bad.name", "database name"),
@@ -156,9 +161,17 @@ fn tdb_url_must_be_a_valid_tdb_url_and_is_checked_before_connecting() {
 fn tdb_url_conflicts_with_model_and_needs_a_statement() {
     let url = "tdb://127.0.0.1:7878/keyval/main";
 
+    // --model and a route in the URL would say the model twice.
     let out = tdb(&["--url", url, "--model", "keyval", "GET x"]);
     assert_eq!(out.status.code(), Some(2));
-    assert!(stderr(&out).contains("--model"), "{}", stderr(&out));
+    let err = stderr(&out);
+    assert!(err.contains("--model"), "{err}");
+    assert!(err.contains("route"), "{err}");
+
+    // Lexing here and sending to a server are opposites.
+    let out = tdb(&["--url", url, "--local", "GET x"]);
+    assert_eq!(out.status.code(), Some(2));
+    assert!(stderr(&out).contains("--local"), "{}", stderr(&out));
 
     let out = tdb(&["--url", url]);
     assert_eq!(out.status.code(), Some(2));
@@ -202,7 +215,7 @@ mod remote {
         for (model, statement) in STATEMENTS {
             let remote = tdb(&["--url", &format!("{root}/{model}/main"), statement]);
             assert!(remote.status.success(), "{model}: {}", stderr(&remote));
-            let local = tdb(&["--model", model, statement]);
+            let local = tdb(&["--local", "--model", model, statement]);
             assert!(local.status.success(), "{model}");
             assert_eq!(stdout(&remote), stdout(&local), "{model}");
             assert!(stdout(&remote).contains("EndOfFile"), "{model}");
@@ -221,6 +234,89 @@ mod remote {
         assert!(!rdbms.contains("Keyword(MATCH)"), "{rdbms}");
         assert_ne!(graph, rdbms);
         daemon.stop();
+    }
+
+    #[test]
+    fn tdb_without_a_route_takes_the_model_from_the_statements_first_word() {
+        let (_dir, daemon, root) = start();
+        // (statement, the model it should be sent as)
+        let cases = [
+            ("GET user:1", "keyval"),
+            ("HSET h f v", "keyval"),
+            ("MATCH (n) RETURN n;", "graph"),
+            ("SELECT name FROM users;", "rdbms"),
+            ("INSERT INTO t VALUES (1);", "rdbms"),
+            // A name says nothing, and neither does a word every model has:
+            // the default is rdbms.
+            ("x VECTOR", "rdbms"),
+            ("CREATE TABLE t (id INT);", "rdbms"),
+            // Not even a statement that fails to lex locally in any model.
+            ("'unterminated", "rdbms"),
+        ];
+        for (statement, model) in cases {
+            let remote = tdb(&["--url", &root, statement]);
+            let local = tdb(&["--local", "--model", model, statement]);
+            assert_eq!(stdout(&remote), stdout(&local), "{statement}");
+            assert_eq!(remote.status.code(), local.status.code(), "{statement}");
+        }
+        // The server's own log says which route each connection had.
+        let log = daemon.stop();
+        for expected in [
+            "route /keyval/main",
+            "route /graph/main",
+            "route /rdbms/main",
+        ] {
+            assert!(
+                log.contains(expected),
+                "no {expected:?} in the server log:\n{log}"
+            );
+        }
+        assert!(!log.contains("route /vector/"), "{log}");
+    }
+
+    #[test]
+    fn tdb_model_flag_picks_the_route_when_the_url_has_none() {
+        let (_dir, daemon, root) = start();
+        // The statement says rdbms; the flag says vector, and wins.
+        let statement = "SELECT id FROM docs ORDER BY e <-> [0.1, 0.2] LIMIT 1;";
+        let remote = tdb(&["--url", &root, "--model", "vector", statement]);
+        assert!(remote.status.success(), "{}", stderr(&remote));
+        let local = tdb(&["--local", "--model", "vector", statement]);
+        assert_eq!(stdout(&remote), stdout(&local));
+
+        // And in a dialect that does not reserve SELECT, the word is a name.
+        let graph = stdout(&tdb(&["--url", &root, "-m", "graph", "SELECT 1;"]));
+        assert!(!graph.contains("Keyword(SELECT)"), "{graph}");
+
+        let log = daemon.stop();
+        assert!(log.contains("route /vector/main"), "{log}");
+        assert!(log.contains("route /graph/main"), "{log}");
+    }
+
+    #[test]
+    fn tdb_a_route_in_the_url_is_used_as_written() {
+        let (_dir, daemon, root) = start();
+        // The statement says keyval, the URL says graph and a database.
+        let out = tdb(&["--url", &format!("{root}/graph/social"), "GET user:1"]);
+        let local = tdb(&["--local", "--model", "graph", "GET user:1"]);
+        assert_eq!(stdout(&out), stdout(&local));
+        assert!(!stdout(&out).contains("Keyword(GET)"));
+        let log = daemon.stop();
+        assert!(log.contains("route /graph/social"), "{log}");
+    }
+
+    #[test]
+    fn tdb_sends_to_the_default_address_when_given_no_url() {
+        // The default is 127.0.0.1:7878, which a developer may have a tdbd
+        // on and may not, so either outcome is checked.
+        let out = tdb(&["GET user:1"]);
+        if out.status.success() {
+            assert!(stdout(&out).contains("Keyword(GET)"), "{}", stdout(&out));
+        } else {
+            let err = stderr(&out);
+            assert!(err.contains("connecting to 127.0.0.1:7878"), "{err}");
+            assert!(err.contains("is tdbd running"), "{err}");
+        }
     }
 
     #[test]

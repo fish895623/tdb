@@ -32,7 +32,8 @@ paths:
     waits for the "is running" line, sends SIGTERM or SIGINT with `kill`,
     and kills the process on drop so a failed test leaves nothing behind. That
     handle lives in `tests/support/mod.rs`, shared with `tdb.rs`, whose
-    `remote` module runs `tdb --url` against a real `tdbd`. Daemons always
+    `remote` module runs `tdb` against a real `tdbd`, and reads the server's debug
+    log (`route /graph/main`) to check which route the client chose. Daemons always
     listen on port 0 (`Daemon::spawn` adds `--listen 127.0.0.1:0`), so tests
     never collide with each other or with a real `tdbd`
 - Name tests `<module>_<behaviour>` in snake_case, e.g.
