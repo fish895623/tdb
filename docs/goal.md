@@ -16,6 +16,9 @@ all-or-nothing. See `dd-002-multi-model.md`.
 - Persist data in a single, self-describing file (`tdatabase.db`)
 - Be embeddable: the engine crate (`tdb-core`) has no dependencies beyond the
   `log` facade; everything heavier lives in its own crate
+- Be open source and sustainable: AGPL-3.0 for everyone, plus a commercial
+  license (one accepted pull request or a fee, every six months) for those who
+  cannot follow the AGPL (see `LICENSE-COMMERCIAL.md`)
 - Be configurable: settings (database path, log level, and the DD-001 storage
   tunables) come from `config.toml` via the `tdb-config` crate; see
   `config.toml` for every key

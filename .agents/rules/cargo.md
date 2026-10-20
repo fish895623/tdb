@@ -36,14 +36,17 @@ paths:
   the engine.
 
 ## License
-- tdb is licensed under PolyForm Noncommercial 1.0.0 (`LICENSE`) and sold
-  under a separate commercial license (`LICENSE-COMMERCIAL.md`). Each crate sets
-  `license.workspace = true`.
+- tdb is dual-licensed: open source under AGPL-3.0-only (`LICENSE`, with the
+  notice in `NOTICE`) and a paid commercial license (`LICENSE-COMMERCIAL.md`).
+  Each crate sets `license.workspace = true`. The commercial license costs one
+  accepted pull request or a fee per six months; keep `LICENSE-COMMERCIAL.md`,
+  `README.md` and `CONTRIBUTING.md` consistent when the terms change.
 - Dependencies must be permissively licensed (MIT, Apache-2.0, BSD, ISC,
   Unicode, and similar). Do not add GPL, LGPL, AGPL, SSPL or other copyleft
-  dependencies: they would conflict with selling commercial licenses. Check
-  with `cargo metadata` before adding one.
-- Keep the `Required Notice:` line at the top of `LICENSE`.
+  dependencies: the commercial license could not include them. Check with
+  `cargo metadata` before adding one.
+- Do not accept outside code without a signed CLA (`CONTRIBUTING.md`): the
+  commercial license needs the rights to all of it.
 
 ## Safety
 - The root `[workspace.lints.rust] unsafe_code = "forbid"` covers every crate.
