@@ -3,6 +3,7 @@
 #include <cstdint>
 #include <fstream>
 #include <memory>
+#include <spdlog/spdlog.h>
 #include <stdexcept>
 #include <string>
 #include <vector>
@@ -25,7 +26,8 @@ class Database {
   // Open (or start empty) the database at `path`. Data is loaded
   // eagerly; call Flush() to persist.
   static Database Open(const std::string& path) {
-    Database db(std::move(path));
+    SPDLOG_TRACE("Opening database at {}", path);
+    Database db(path);
     db.Load();
     return db;
   }
@@ -51,20 +53,20 @@ class Database {
       throw std::runtime_error("cannot open " + path_ + " for writing");
     WriteString(f, "TDB1");
     WriteU32(f, 1);  // format version
-    WriteU32(f, (uint32_t)tables_.size());
+    WriteU32(f, static_cast<uint32_t>(tables_.size()));
     for (const auto& t : tables_) {
-      WriteU8(f, (uint8_t)t->Name().size());
+      WriteU8(f, static_cast<uint8_t>(t->Name().size()));
       WriteBytes(f, t->Name().data(), t->Name().size());
       const auto& schema = t->Schema();
-      WriteU32(f, (uint32_t)schema.size());
-      for (const auto& field : schema) {
-        WriteU8(f, (uint8_t)field.name.size());
-        WriteBytes(f, field.name.data(), field.name.size());
-        WriteU8(f, (uint8_t)field.type);
+      WriteU32(f, static_cast<uint32_t>(schema.size()));
+      for (const auto &[name, type] : schema) {
+        WriteU8(f, static_cast<uint8_t>(name.size()));
+        WriteBytes(f, name.data(), name.size());
+        WriteU8(f, static_cast<uint8_t>(type));
       }
       WriteU64(f, t->Count());
       for (const auto& r : t->Records()) {
-        WriteU32(f, (uint32_t)r.bytes().size());
+        WriteU32(f, static_cast<uint32_t>(r.bytes().size()));
         WriteBytes(f, r.bytes().data(), r.bytes().size());
       }
     }

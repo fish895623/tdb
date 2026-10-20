@@ -18,7 +18,7 @@ add_executable(tdb_tests
   db_test.cpp
 )
 target_include_directories(tdb_tests PRIVATE ${PROJECT_SOURCE_DIR}/include)
-target_link_libraries(tdb_tests PRIVATE GTest::gtest_main)
+target_link_libraries(tdb_tests PRIVATE GTest::gtest_main spdlog::spdlog)
 
 if(NOT MSVC)
   target_compile_options(tdb_tests PRIVATE -Wall -Wextra)

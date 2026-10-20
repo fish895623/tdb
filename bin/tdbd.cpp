@@ -1,11 +1,18 @@
 #include <iostream>
+#include <spdlog/spdlog.h>
+#include <spdlog/cfg/env.h>
 
 #include "tdb/db.h"
+#include "tdb/kv_lexer.h"
 
 using namespace tdb;
 
 int main() {
-  std::cout << "Hello, World!" << std::endl;
+  spdlog::set_level(spdlog::level::trace);
+  spdlog::cfg::load_env_levels();
+
+  hello();
+  SPDLOG_INFO("Hello, World!");
 
   Database db = Database::Open("tdatabase.db");
 
