@@ -352,7 +352,7 @@ TEST_F(DatabaseTest, RoundTripsMaxLengthAndUtf8Names) {
 }
 
 TEST_F(DatabaseTest, RecordsAccumulateAcrossSessions) {
-  // Mirrors how main.cpp uses the database: reopen, append, flush.
+  // Mirrors how bin/tdb.cpp uses the database: reopen, append, flush.
   for (int session = 0; session < 3; ++session) {
     Database db = Database::Open(path_);
     Table* t = db.GetTable("log");

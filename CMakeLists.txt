@@ -5,8 +5,7 @@ set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
-add_executable(tdb main.cpp)
-target_include_directories(tdb PRIVATE include)
+include(cmake/Executables.cmake)
 
 include(CTest)
 if(BUILD_TESTING)

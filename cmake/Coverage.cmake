@@ -1,12 +1,12 @@
-# gcov-style coverage: instruments tdb (+ tdb_tests if present) and adds a
-# `coverage` target that runs the tests and collects results.
+# gcov-style coverage: instruments the bin/ targets (+ tdb_tests if present)
+# and adds a `coverage` target that runs the tests and collects results.
 
 if(NOT CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang|AppleClang")
   message(FATAL_ERROR
           "ENABLE_COVERAGE is not supported by ${CMAKE_CXX_COMPILER_ID}")
 endif()
 
-set(_cov_targets tdb)
+set(_cov_targets ${TDB_BIN_TARGETS})
 if(TARGET tdb_tests)
   list(APPEND _cov_targets tdb_tests)
 endif()
