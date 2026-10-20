@@ -5,12 +5,53 @@ An embedded, file-based **multi-model database engine** in Rust: key-value
 storage core and one transaction domain. Written from scratch, in safe Rust only
 (`unsafe` is forbidden), with no SQLite or other storage dependencies.
 
+It runs two ways, over one engine: **embedded** in your own process (link
+`tdb-core` and open the file, the way you use SQLite), or as a **server**:
+`tdbd` is the database server and `tdb` is its command-line client, the way
+MariaDB has `mariadbd` and `mariadb`. See [Server and client](#server-and-client).
+
 > **Status: early development. Not production-ready.** What exists today is a
 > v1 storage engine (fixed-width typed tables, a single-file format), a lexer
 > for the command language, and a server and client that speak the tdb wire
 > protocol (statements are tokenized, not yet executed). The pages/B+tree
 > storage core, the four model layers and the parser are planned, not built. See
 > the roadmap in [docs/goal.md](docs/goal.md).
+
+## Server and client
+
+`tdbd` opens the database and answers connections; `tdb` connects to it and
+sends statements. If you know MariaDB, you know the arrangement:
+
+| | MariaDB | tdb |
+|---|---|---|
+| Server | `mariadbd` | `tdbd` |
+| Client | `mariadb` | `tdb` |
+| Wire protocol | the MySQL protocol | the tdb protocol, [DD-005](docs/dd-005-wire-protocol.md) |
+| Default address | port 3306 | `127.0.0.1:7878`, loopback only |
+| Server settings | `my.cnf` | [`config.toml`](config.toml), and `--listen` |
+| Connect | `mariadb -h HOST -P PORT db` | `tdb --url tdb://HOST:PORT/MODEL/DB` |
+| Run one statement | `mariadb -e "SELECT 1"` | `tdb "SELECT 1;"` |
+| Accounts and TLS | yes | not yet |
+| Interactive shell | yes | not yet: one statement per run |
+
+One difference follows from the engine: tdb has four models in one server, so a
+connection picks a *model* as well as a database (`/keyval/main`, `/graph/social`,
+...). `tdb` works the model out from the statement's first word, or you give it
+with `--model` or in the URL.
+
+```sh
+cargo run --bin tdbd                  # terminal 1: the server, on 127.0.0.1:7878
+cargo run --bin tdb -- "GET user:1"   # terminal 2: the client sends it a statement
+```
+
+`tdbd` is the process that opens the database file, and clients talk to it over
+the protocol instead of opening the file themselves. The engine does not lock the
+file yet, so do not point two engines (two `tdbd`s, or one plus an embedded
+program) at the same file.
+
+**Today the server tokenizes statements and does not execute them**: the
+parser and the model layers are not built, so a reply is the list of tokens.
+Lexing here, with no server, is `tdb --local "..."`.
 
 ## Layout
 
@@ -22,8 +63,8 @@ A Cargo workspace:
 | `tdb-lexer` | lexer for the four-model command language |
 | `tdb-config` | settings, read from `config.toml` |
 | `tdb-protocol` | the wire protocol: `tdb://` URLs, routes, frames |
-| `tdb-server` | the listener `tdbd` runs: accepts `tdb://` connections |
-| `tdb-cli` | the `tdb` client and the `tdbd` daemon |
+| `tdb-server` | the server library `tdbd` runs: accepts `tdb://` connections |
+| `tdb-cli` | the `tdbd` server and the `tdb` client |
 
 ## Build and test
 
@@ -32,18 +73,24 @@ Requires Rust 1.85 or newer.
 ```sh
 cargo build --workspace
 cargo test --workspace
-cargo run --bin tdbd     # appends two records to ./tdatabase.db, then keeps
-                         # running on 127.0.0.1:7878 until Ctrl-C or SIGTERM
-cargo run --bin tdbd -- --once   # the same, but exit right after
-cargo run --bin tdb      # tokenizes one built-in statement per model, here
-# with tdbd running, send it a statement over the tdb protocol:
+
+# the server: appends two records to ./tdatabase.db, then keeps running on
+# 127.0.0.1:7878 until Ctrl-C (SIGINT) or SIGTERM
+cargo run --bin tdbd
+cargo run --bin tdbd -- --once        # the same, but exit right after
+cargo run --bin tdbd -- --help
+
+# the client, with a tdbd running
 cargo run --bin tdb -- "MATCH (n) RETURN n;"
 cargo run --bin tdb -- --url tdb://127.0.0.1:7878/graph/social "MATCH (n) RETURN n;"
-cargo run --bin tdb -- --local "MATCH (n) RETURN n;"   # tokenize here, no server
-cargo run --bin tdbd -- --help
+
+# the client without a server: tokenizes here
+cargo run --bin tdb -- --local "MATCH (n) RETURN n;"
+cargo run --bin tdb                   # one built-in statement per model
 ```
 
-Settings live in [`config.toml`](config.toml); every key is optional.
+The server's settings live in [`config.toml`](config.toml); every key is
+optional. The client takes the server's address on its command line.
 
 ## Design
 

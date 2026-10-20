@@ -36,7 +36,7 @@ const IO_TIMEOUT: Duration = Duration::from_secs(10);
 /// The database a statement goes to when the route is not spelled out.
 const DEFAULT_DATABASE: &str = "main";
 
-/// The tdb command-line client: sends a statement to a tdbd
+/// The tdb command-line client: sends statements to a tdbd, the server
 #[derive(Debug, Parser)]
 #[command(
     name = "tdb",

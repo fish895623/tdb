@@ -1,5 +1,6 @@
-# tdb settings. Every key is optional; the values here are the defaults.
-# The programs read the first of: --config <path>, $TDB_CONFIG, ./config.toml.
+# tdbd (the server) settings. Every key is optional; the values here are the
+# defaults. tdbd reads the first of: --config <path>, $TDB_CONFIG, ./config.toml.
+# The client, tdb, takes the server's address on its command line instead.
 
 [database]
 path = "tdatabase.db"

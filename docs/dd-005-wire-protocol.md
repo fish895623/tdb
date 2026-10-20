@@ -33,6 +33,33 @@ This does not rule out a Redis-compatible front end. A RESP listener for
 `keyval` (DD-002) would be a second listener over the same engine, not a change
 to this protocol.
 
+## Server and client
+
+The two programs are a server and its client, the arrangement MariaDB has with
+`mariadbd` and `mariadb`:
+
+| | MariaDB | tdb |
+|---|---|---|
+| Server | `mariadbd` | `tdbd` |
+| Client | `mariadb` | `tdb` |
+| Protocol | the MySQL protocol | this one |
+| Default address | port 3306 | `127.0.0.1:7878` |
+| Connect | `mariadb -h HOST -P PORT db` | `tdb --url tdb://HOST:PORT/MODEL/DB` |
+| One statement | `mariadb -e "SELECT 1"` | `tdb "SELECT 1;"` |
+
+- **`tdbd` is the only process that opens the database file.** It holds the
+  engine and the file for as long as it runs, and answers connections. A client
+  never opens the file: it connects, says hello with a route, sends statements,
+  and reads replies. That is why the protocol, not the file format, is the
+  interface for clients and tools (see `goal.md`, "IDE Integration").
+- **`tdb` is a client of the protocol and nothing more.** It does not use the
+  engine, only `tdb-protocol` (and the lexer, for `--local`).
+- **A connection has a model as well as a database**, because tdb serves four
+  models from one server. MariaDB's `mariadb db` picks one database; a tdb route
+  is `/<model>/<database>`.
+- **Not yet like MariaDB:** accounts and TLS (see "Not in v1"), and an
+  interactive shell. `tdb` sends one statement per run.
+
 ## Framing
 
 Every message is one frame:

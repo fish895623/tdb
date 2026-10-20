@@ -5,6 +5,9 @@ Rust: **key-value (Redis-style), relational with an ORM, vector, and graph**,
 bound into one engine with one storage core and one transaction domain.
 It is built from scratch: no SQLite, no external storage dependencies.
 
+It runs embedded in a program, or as a server: `tdbd` is the database server and
+`tdb` its command-line client, the way MariaDB has `mariadbd` and `mariadb`.
+
 The point of binding them is atomicity and one query surface across models: a
 single write can insert a row, its embedding, a graph edge, and a cache key
 all-or-nothing. See `dd-002-multi-model.md`.
@@ -16,12 +19,15 @@ all-or-nothing. See `dd-002-multi-model.md`.
 - Persist data in a single, self-describing file (`tdatabase.db`)
 - Be embeddable: the engine crate (`tdb-core`) has no dependencies beyond the
   `log` facade; everything heavier lives in its own crate
+- Be servable: `tdbd` keeps the database open and answers `tdb://` connections,
+  and `tdb` is the client, like `mariadbd` and `mariadb` (`dd-005-wire-protocol.md`).
+  Clients talk to the server over the protocol and never open the file
 - Be open source and sustainable: AGPL-3.0 for everyone, plus a commercial
   license (one accepted pull request or a fee, every six months) for those who
   cannot follow the AGPL (see `LICENSE-COMMERCIAL.md`)
-- Be configurable: settings (database path, log level, and the DD-001 storage
-  tunables) come from `config.toml` via the `tdb-config` crate; see
-  `config.toml` for every key
+- Be configurable: the server's settings (database path, log level, listen
+  address, and the DD-001 storage tunables) come from `config.toml` via the
+  `tdb-config` crate; see `config.toml` for every key
 
 ## One Engine, Four Models
 
@@ -30,7 +36,7 @@ model is a key encoding over that, not a new storage engine.
 
 | Model             | Maps to                                                                                                  |
 |-------------------|----------------------------------------------------------------------------------------------------------|
-| Key-value (Redis) | `(key, field/member/seq) -> value`; strings, hashes, sets, lists, sorted sets, TTL; optional RESP server |
+| Key-value (Redis) | `(key, field/member/seq) -> value`; strings, hashes, sets, lists, sorted sets, TTL; optional RESP listener |
 | Relational + ORM  | `pk -> row` plus secondary-index keyspaces; `#[derive(Model)]`                                           |
 | Vector            | `Vector(dim)` column; exact search, then HNSW                                                            |
 | Graph             | nodes are rows; edges are rows plus out/in index keyspaces                                               |
@@ -62,7 +68,7 @@ model is a key encoding over that, not a new storage engine.
 | Variable-length types (`kText`)                             | ⏳ planned          |
 | Delete / update / WAL                                       | ⏳ planned          |
 | SQL query layer                                             | ⏳ planned          |
-| Wire protocol, `tdbd` listener, `tdb --url` client (dd-005) | ✅ lexing only      |
+| `tdbd` server and `tdb` client over the tdb protocol (dd-005) | ✅ lexing only      |
 
 ## IDE Integration (schema-aware tooling)
 
@@ -75,7 +81,8 @@ contract:
 - the engine exports its schema as **`tdb.schema.json`** (tables, columns,
   `FieldType`). This JSON is the stable interface for all IDE tooling —
   no tool ever parses the binary `tdatabase.db` format.
-- optional `tdb` CLI binary for query execution from IDE tools.
+- the `tdb` client (a `mariadb`-style CLI that connects to a running `tdbd`) for
+  query execution from IDE tools.
 
 front-ends (one contract, three consumers):
 
@@ -83,7 +90,7 @@ front-ends (one contract, three consumers):
     - schema completion: table/column names in queries and in
       Rust API calls like `db.get_table("…")`
     - read-only data browser (from schema JSON)
-    - query console (shells out to the `tdb` CLI)
+    - query console (shells out to the `tdb` client, so it needs a running `tdbd`)
     - deliberately the *lightweight* tier: own tool window, NOT the
       JDBC-based `com.intellij.database` tier-2 API (that path serves
       JDBC databases and belongs to DataGrip; Neo4j/Redis/MongoDB
@@ -106,7 +113,7 @@ Dependency order; details and rationale in `dd-002-multi-model.md`.
 3. **Keyspaces**: order-preserving key encoding, range/prefix scans; tables
    gain primary keys and secondary indexes.
 4. **Key-value layer**: strings, hashes, sets, lists, sorted sets, TTL; then a
-   RESP server so Redis clients work.
+   RESP listener in `tdb-server`, beside the tdb protocol, so Redis clients work.
 5. **ORM**: `#[derive(Model)]`, query builder, schema JSON export (`tdb.schema.json`, the IDE contract).
 6. **Vector**: `Vector(dim)` column, exact search, then HNSW.
 7. **Graph**: edge tables with out/in indexes, traversal API.

@@ -14,7 +14,7 @@ paths:
 | `tdb-lexer` | lexer for the four-model command language (`docs/dd-003-query-lexer.md`) | `logos` |
 | `tdb-protocol` | the wire protocol: routes, `tdb://` endpoints, frames (`docs/dd-005-wire-protocol.md`) | `tdb-lexer` |
 | `tdb-server` | the listener and connection handling | `tdb-protocol`, `tdb-lexer`, `log`, `tokio` |
-| `tdb-cli` | the `tdb` and `tdbd` programs | the crates above, `clap`, `tokio`, `env_logger`, `anyhow` |
+| `tdb-cli` | `tdbd`, the server program, and `tdb`, the client | the crates above, `clap`, `tokio`, `env_logger`, `anyhow` |
 
 - Crates live in `crates/<name>/` and are listed in the root `Cargo.toml`
   `members`. Edition, version, `rust-version` and lints are inherited
@@ -31,6 +31,11 @@ paths:
   `--version` and a usage error (exit status 2) never touch the database. A
   type from a crate that must not depend on `clap` (`tdb_lexer::Model`) gets
   a local `ValueEnum` mirror in the program.
+- `tdbd` is the server and `tdb` is the client, like `mariadbd` and `mariadb`.
+  `tdbd` is the only process that opens the database file; `tdb` talks to it
+  over `tdb-protocol` and never uses the engine (its `--local` mode only lexes).
+  Keep it that way: a feature the client needs is a protocol message, not a
+  `tdb-core` call from `tdb.rs`.
 - `tdbd` is a long-running process on a `tokio` runtime (`#[tokio::main]`).
   `main` parses the arguments first thing, so `--help`, `--version` and a
   usage error exit before the database is touched. It stays up until SIGINT or

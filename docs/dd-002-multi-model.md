@@ -29,7 +29,7 @@ Build the substrate once; the four layers stay small.
 ## Layers
 
 ```
-L3  Access        Rust API (one Tx over all models) · #[derive(Model)] ORM · RESP server
+L3  Access        Rust API (one Tx over all models) · #[derive(Model)] ORM · tdbd server (DD-005)
 L2  Models        tables · kv · vectors · graph
 L1  Keyspaces     named B+trees, order-preserving key encoding, range/prefix scans
 L0  Storage core  pages · buffer pool · COW commit · catalog   (DD-001)
@@ -44,14 +44,30 @@ One Cargo workspace, one crate per concern, dependencies pointing downward
 |---|---|
 | `tdb-core` | L0–L1 and the table model (v1 engine) |
 | `tdb-lexer` | command-language front end for all four models (DD-003); a parser comes next |
-| `tdb-config` | settings |
-| `tdb-cli` | the `tdb` and `tdbd` programs |
+| `tdb-config` | settings, read by the server |
+| `tdb-protocol` | the wire protocol shared by server and clients (DD-005) |
+| `tdb-server` | the server library: listener and connections (DD-004, DD-005) |
+| `tdb-cli` | `tdbd`, the server program, and `tdb`, the client |
 
 Planned, each added when its milestone starts rather than as empty shells:
 `tdb-kv`, `tdb-vector`, `tdb-graph` (the model layers over `tdb-core`),
 `tdb-derive` (the ORM proc macro, which Rust requires to be its own crate),
-`tdb-server` (RESP), and a `tdb` facade crate that re-exports the lot behind
-features.
+and a `tdb` facade crate that re-exports the lot behind features. A RESP
+listener for key-value would be a second front end in `tdb-server`.
+
+### Embedded or server
+
+The engine runs two ways, and they are the same engine:
+
+- **Embedded**: a program links `tdb-core` (and later the model crates) and opens
+  the database file itself, as with SQLite.
+- **Server**: `tdbd` links the engine, opens the file, and serves the tdb
+  protocol (DD-005); `tdb` is the client. This is MariaDB's shape: `tdbd` is to
+  tdb what `mariadbd` is to MariaDB, and `tdb` is its `mariadb`. A client never
+  opens the file, it sends statements to the server.
+
+The engine has no file locking yet, so one file belongs to one process at a
+time, the server or an embedding program, not both.
 
 ### L0 — Storage core (DD-001, plus transactions)
 
@@ -137,8 +153,9 @@ let hits = db.table::<Document>().nearest(Document::EMBEDDING, &query, 10)?;
   typed column constants for the query builder. The same metadata feeds the
   `tdb.schema.json` export from `goal.md`, so the IDE contract and the ORM share
   one source of truth.
-- **Redis protocol**: an optional `tdb-server` crate speaks RESP so existing
-  Redis clients work. The engine itself stays an embedded library.
+- **Redis protocol**: an optional RESP listener in `tdb-server` lets existing
+  Redis clients work. The engine itself stays an embeddable library; `tdbd` is
+  one program built on it.
 
 ## What Has To Change In The Current Code
 
@@ -164,7 +181,7 @@ let hits = db.table::<Document>().nearest(Document::EMBEDDING, &query, 10)?;
 3. **Keyspaces**: key encoding, range/prefix scans; tables gain primary keys
    and secondary indexes.
 4. **Key-value layer**: strings, hashes, sets, lists, sorted sets, TTL;
-   embedded API. Then the RESP server.
+   embedded API. Then a RESP listener in `tdb-server`.
 5. **ORM**: `#[derive(Model)]`, query builder, schema JSON export.
 6. **Vector**: `Vector(dim)` column, exact search, then HNSW.
 7. **Graph**: edge tables and the two indexes, traversal API.
@@ -178,16 +195,18 @@ reuse what it proved.
 ## Non-Goals (for now)
 
 - Full Redis command coverage or cluster/replication. A useful subset only.
-- Distributed anything: this is an embedded engine.
+- Distributed anything (replication, clustering): one engine, embedded or behind
+  one `tdbd`.
 - Full SQL or Cypher in the first cut.
 - GPU or approximate-everything vector search; exact first.
 
 ## Open Questions
 
-1. **Redis compatibility**: wire-compatible RESP server, an embedded Redis-style
+1. **Redis compatibility**: a wire-compatible RESP listener, an embedded Redis-style
    API, or both? Recommendation: both, embedded first.
-2. **Process model**: embedded library only, or also a standalone server
-   binary? Recommendation: library first; the server is an optional crate.
+2. **Process model**: *answered:* both. The engine is an embeddable library,
+   and `tdbd` is a standalone server over it (DD-005), with `tdb` as its client,
+   like `mariadbd` and `mariadb`.
 3. **Vector scale target**: millions of vectors in RAM, or beyond RAM like the
    DD-001 reference case? This decides how early quantization and disk-based
    ANN are needed.

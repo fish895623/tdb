@@ -12,7 +12,7 @@ use tdb_core::{Database, Field, FieldType};
 use tokio::net::TcpListener;
 use tokio::task;
 
-/// The tdb database daemon.
+/// The tdb database server: keeps the database open and answers tdb clients
 #[derive(Debug, Parser)]
 #[command(
     name = "tdbd",
