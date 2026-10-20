@@ -35,6 +35,16 @@ paths:
   `logos`. Anything heavier belongs in its own crate, not behind a feature of
   the engine.
 
+## License
+- tdb is licensed under PolyForm Noncommercial 1.0.0 (`LICENSE`) and sold
+  under a separate commercial license (`LICENSE-COMMERCIAL.md`). Each crate sets
+  `license.workspace = true`.
+- Dependencies must be permissively licensed (MIT, Apache-2.0, BSD, ISC,
+  Unicode, and similar). Do not add GPL, LGPL, AGPL, SSPL or other copyleft
+  dependencies: they would conflict with selling commercial licenses. Check
+  with `cargo metadata` before adding one.
+- Keep the `Required Notice:` line at the top of `LICENSE`.
+
 ## Safety
 - The root `[workspace.lints.rust] unsafe_code = "forbid"` covers every crate.
   Do not add `#[allow(unsafe_code)]`; find a safe design (see `docs/dd-001` on
