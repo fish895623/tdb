@@ -31,12 +31,13 @@ paths:
   `--version` and a usage error (exit status 2) never touch the database. A
   type from a crate that must not depend on `clap` (`tdb_lexer::Model`) gets
   a local `ValueEnum` mirror in the program.
-- `tdbd` is a long-running process on a `tokio` runtime, built by hand in
-  `main` after the arguments, settings and logger (not `#[tokio::main]`). It
-  stays up until SIGINT or SIGTERM, then flushes and exits 0; `--once` runs
-  the startup step and exits. Register the signal listeners before opening
-  the database, and run the engine's blocking file I/O through
-  `spawn_blocking`, never on a worker thread. Only `tdb-cli` (and the future
+- `tdbd` is a long-running process on a `tokio` runtime (`#[tokio::main]`).
+  `main` parses the arguments first thing, so `--help`, `--version` and a
+  usage error exit before the database is touched. It stays up until SIGINT or
+  SIGTERM, then flushes and exits 0; `--once` runs the startup step and exits.
+  Register the signal listeners before opening the database, and run the
+  engine's blocking file I/O through `spawn_blocking`, never on a worker
+  thread. Only `tdb-cli` (and the future
   `tdb-server`) may depend on `tokio`; the engine and lexer stay
   runtime-free. `tdb-protocol` has no sockets and no runtime either, so the
   clients and the server share it; the blocking `tdb` client uses `std::net`.

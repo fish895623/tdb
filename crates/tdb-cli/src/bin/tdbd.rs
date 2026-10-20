@@ -10,7 +10,6 @@ use env_logger::{Env, Target};
 use tdb_config::{Config, DEFAULT_CONFIG_FILE};
 use tdb_core::{Database, Field, FieldType};
 use tokio::net::TcpListener;
-use tokio::runtime;
 use tokio::task;
 
 /// The tdb database daemon.
@@ -40,7 +39,8 @@ struct Args {
     once: bool,
 }
 
-fn main() -> Result<()> {
+#[tokio::main]
+async fn main() -> Result<()> {
     // Parses before anything else runs, so --help, --version and a bad
     // argument exit without touching the database.
     let args = Args::parse();
@@ -56,14 +56,7 @@ fn main() -> Result<()> {
     .target(Target::Stdout)
     .init();
 
-    // Built here, after the settings are known, rather than with
-    // `#[tokio::main]`, so a bad argument or config never starts a runtime.
-    let runtime = runtime::Builder::new_multi_thread()
-        .thread_name("tdbd")
-        .enable_all()
-        .build()
-        .context("starting the async runtime")?;
-    runtime.block_on(run(config, args.once))
+    run(config, args.once).await
 }
 
 /// Open the database, then serve `tdb://` clients until asked to stop (or,
