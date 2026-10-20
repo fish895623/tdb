@@ -1,4 +1,4 @@
-use tdb::FieldType;
+use tdb_core::FieldType;
 
 const ALL: [FieldType; 5] = [
     FieldType::Bool,

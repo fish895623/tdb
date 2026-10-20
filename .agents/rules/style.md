@@ -1,8 +1,6 @@
 ---
 paths:
-  - "src/**"
-  - "tests/**"
-  - "examples/**"
+  - "crates/**"
   - "Cargo.toml"
 ---
 
@@ -14,7 +12,8 @@ lints enforce naming.
 
 | What | Style | Example |
 | --- | --- | --- |
-| Crate, module, file | `snake_case` | `kv_lexer` |
+| Crate (package) | `kebab-case`, imported as `snake_case` | `tdb-core`, `tdb_core` |
+| Module, file | `snake_case` | `kv_lexer` |
 | Type, trait, enum, variant | `CamelCase` | `Database`, `FieldType::Int64` |
 | Function, method, variable, field | `snake_case` | `get_table()`, `path` |
 | Constant, static | `SCREAMING_SNAKE_CASE` | `MAX_NAME_LEN` |

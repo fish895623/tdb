@@ -475,17 +475,39 @@ dependencies = [
 ]
 
 [[package]]
-name = "tdb"
+name = "tdb-cli"
 version = "0.1.0"
 dependencies = [
  "anyhow",
  "env_logger",
+ "tdb-config",
+ "tdb-core",
+ "tdb-lexer",
+ "tempfile",
+ "uuid",
+]
+
+[[package]]
+name = "tdb-config"
+version = "0.1.0"
+dependencies = [
  "log",
  "serde",
  "tempfile",
  "toml",
- "uuid",
 ]
+
+[[package]]
+name = "tdb-core"
+version = "0.1.0"
+dependencies = [
+ "log",
+ "tempfile",
+]
+
+[[package]]
+name = "tdb-lexer"
+version = "0.1.0"
 
 [[package]]
 name = "tempfile"

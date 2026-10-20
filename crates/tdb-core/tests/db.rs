@@ -7,7 +7,7 @@ use std::f64::consts::PI;
 use std::fs::{self, OpenOptions};
 use std::path::{Path, PathBuf};
 
-use tdb::{Database, Error, Field, FieldType, Table};
+use tdb_core::{Database, Error, Field, FieldType, Table};
 use tempfile::TempDir;
 
 /// Gives each test its own scratch directory (and so its own database path).

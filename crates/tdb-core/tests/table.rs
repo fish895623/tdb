@@ -1,4 +1,4 @@
-use tdb::{Error, Field, FieldType, Record, Table};
+use tdb_core::{Error, Field, FieldType, Record, Table};
 
 fn user_schema() -> Vec<Field> {
     vec![

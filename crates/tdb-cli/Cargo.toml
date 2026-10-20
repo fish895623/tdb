@@ -1,0 +1,21 @@
+[package]
+name = "tdb-cli"
+description = "The tdb and tdbd programs"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+
+[dependencies]
+tdb-core.workspace = true
+tdb-config.workspace = true
+tdb-lexer.workspace = true
+anyhow.workspace = true
+env_logger.workspace = true
+
+[dev-dependencies]
+tempfile.workspace = true
+uuid.workspace = true
+
+[lints]
+workspace = true

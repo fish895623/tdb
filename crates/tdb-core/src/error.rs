@@ -14,8 +14,6 @@ pub enum Error {
     Arity { expected: usize, got: usize },
     /// A record's byte length does not match its table's schema.
     RecordSize { expected: usize, got: usize },
-    /// The settings are missing, unreadable, or have an invalid value.
-    Config(String),
     /// A table with this name already exists.
     TableExists(String),
     /// A length does not fit the on-disk field that stores it.
@@ -41,7 +39,6 @@ impl fmt::Display for Error {
             Error::RecordSize { expected, got } => {
                 write!(f, "record is {got} bytes but the schema needs {expected}")
             }
-            Error::Config(msg) => write!(f, "invalid configuration: {msg}"),
             Error::TableExists(name) => write!(f, "table '{name}' already exists"),
             Error::TooLong { what, len, max } => {
                 write!(f, "{what} is too long ({len} > {max})")

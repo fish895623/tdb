@@ -1,43 +1,33 @@
-[package]
-name = "tdb"
+[workspace]
+resolver = "3"
+members = [
+    "crates/tdb-core",
+    "crates/tdb-config",
+    "crates/tdb-lexer",
+    "crates/tdb-cli",
+]
+
+[workspace.package]
 version = "0.1.0"
 edition = "2024"
 rust-version = "1.85"
-description = "An embedded, file-based database engine"
 publish = false
 
-[features]
-default = ["cli"]
-# Load settings from TOML (`Config::from_toml_str` / `Config::load`).
-config = ["dep:serde", "dep:toml"]
-# Everything the bundled programs need. The library alone only needs `log`.
-cli = ["config", "dep:env_logger", "dep:anyhow"]
+[workspace.dependencies]
+tdb-core = { path = "crates/tdb-core" }
+tdb-config = { path = "crates/tdb-config" }
+tdb-lexer = { path = "crates/tdb-lexer" }
 
-[dependencies]
 log = "0.4"
-anyhow = { version = "1", optional = true }
-env_logger = { version = "0.11", optional = true }
-serde = { version = "1", features = ["derive"], optional = true }
-toml = { version = "1", optional = true }
-
-[dev-dependencies]
+serde = { version = "1", features = ["derive"] }
+toml = "1"
+env_logger = "0.11"
+anyhow = "1"
 tempfile = "3"
 uuid = { version = "1", features = ["v7"] }
 
-[[bin]]
-name = "tdbd"
-required-features = ["cli"]
-
-[[test]]
-name = "config"
-required-features = ["config"]
-
-[[test]]
-name = "smoke"
-required-features = ["cli"]
-
-[lints.rust]
+[workspace.lints.rust]
 unsafe_code = "forbid"
 
-[lints.clippy]
+[workspace.lints.clippy]
 all = { level = "warn", priority = -1 }

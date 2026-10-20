@@ -14,10 +14,11 @@ all-or-nothing. See `dd-002-multi-model.md`.
 - Provide a small, readable, correctness-first storage engine
 - Support tables with fixed-width typed columns (v1: Bool, Int32, Int64, Float32, Float64)
 - Persist data in a single, self-describing file (`tdatabase.db`)
-- Be embeddable: one library crate, no required runtime dependencies beyond
-  the `log` facade
+- Be embeddable: the engine crate (`tdb-core`) has no dependencies beyond the
+  `log` facade; everything heavier lives in its own crate
 - Be configurable: settings (database path, log level, and the DD-001 storage
-  tunables) come from `config.toml`; see `config.toml` for every key
+  tunables) come from `config.toml` via the `tdb-config` crate; see
+  `config.toml` for every key
 
 ## One Engine, Four Models
 

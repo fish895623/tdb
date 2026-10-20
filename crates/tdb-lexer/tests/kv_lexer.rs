@@ -1,4 +1,4 @@
-use tdb::kv_lexer::{LexError, Lexer, Token, TokenType};
+use tdb_lexer::{LexError, Lexer, Token, TokenType};
 
 fn lex(input: &str) -> Result<Vec<Token>, LexError> {
     Lexer::new(input).tokenize()

@@ -1,4 +1,4 @@
-use tdb::kv_lexer::{LexError, Lexer};
+use tdb_lexer::{LexError, Lexer};
 
 fn main() -> Result<(), LexError> {
     let commands = "set name = hello\n";

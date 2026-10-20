@@ -35,6 +35,24 @@ L1  Keyspaces     named B+trees, order-preserving key encoding, range/prefix sca
 L0  Storage core  pages · buffer pool · COW commit · catalog   (DD-001)
 ```
 
+### Crate map
+
+One Cargo workspace, one crate per concern, dependencies pointing downward
+(see `.agents/rules/cargo.md`). Today:
+
+| Crate | Layer |
+|---|---|
+| `tdb-core` | L0–L1 and the table model (v1 engine) |
+| `tdb-lexer` | command-language front end (grows into the KV/query parser) |
+| `tdb-config` | settings |
+| `tdb-cli` | the `tdb` and `tdbd` programs |
+
+Planned, each added when its milestone starts rather than as empty shells:
+`tdb-kv`, `tdb-vector`, `tdb-graph` (the model layers over `tdb-core`),
+`tdb-derive` (the ORM proc macro, which Rust requires to be its own crate),
+`tdb-server` (RESP), and a `tdb` facade crate that re-exports the lot behind
+features.
+
 ### L0 — Storage core (DD-001, plus transactions)
 
 - Pages, buffer pool and B+tree exactly as DD-001. File format v2.

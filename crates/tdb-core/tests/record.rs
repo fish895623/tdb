@@ -1,6 +1,6 @@
 //! Ported from tests/record_test.cpp. Uses only the public API.
 
-use tdb::{Error, Field, FieldType, Record};
+use tdb_core::{Error, Field, FieldType, Record};
 
 /// Round-trips a single value through a one-column record.
 fn round_trip(ty: FieldType, value: f64) -> f64 {

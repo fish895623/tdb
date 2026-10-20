@@ -1,12 +1,12 @@
 //! Settings, as read from `config.toml`.
 //!
-//! The types and defaults are always available. Reading TOML needs the
-//! `config` feature. Every key is optional; unknown keys are rejected so a
-//! typo is an error instead of a silently ignored setting.
+//! Every key is optional. Unknown keys are rejected, so a typo is an error
+//! instead of a silently ignored setting.
 
-use std::path::PathBuf;
+use std::fmt;
+use std::path::{Path, PathBuf};
 
-use crate::error::Error;
+use serde::Deserialize;
 
 /// The file the programs look for in the current directory.
 pub const DEFAULT_CONFIG_FILE: &str = "config.toml";
@@ -14,24 +14,44 @@ pub const DEFAULT_CONFIG_FILE: &str = "config.toml";
 pub const MIN_PAGE_SIZE: u32 = 4096;
 pub const MAX_PAGE_SIZE: u32 = 65536;
 
-#[derive(Debug, Clone, PartialEq, Eq, Default)]
-#[cfg_attr(
-    feature = "config",
-    derive(serde::Deserialize),
-    serde(default, deny_unknown_fields)
-)]
+/// Why settings could not be loaded: unreadable file, malformed TOML, an
+/// unknown key, or an invalid value.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ConfigError {
+    message: String,
+}
+
+impl ConfigError {
+    fn new(message: impl Into<String>) -> ConfigError {
+        ConfigError {
+            message: message.into(),
+        }
+    }
+
+    /// What went wrong, without the "invalid configuration" prefix.
+    pub fn message(&self) -> &str {
+        &self.message
+    }
+}
+
+impl fmt::Display for ConfigError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "invalid configuration: {}", self.message)
+    }
+}
+
+impl std::error::Error for ConfigError {}
+
+#[derive(Debug, Clone, PartialEq, Eq, Default, Deserialize)]
+#[serde(default, deny_unknown_fields)]
 pub struct Config {
     pub database: DatabaseConfig,
     pub log: LogConfig,
     pub storage: StorageConfig,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
-#[cfg_attr(
-    feature = "config",
-    derive(serde::Deserialize),
-    serde(default, deny_unknown_fields)
-)]
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+#[serde(default, deny_unknown_fields)]
 pub struct DatabaseConfig {
     /// The database file.
     pub path: PathBuf,
@@ -45,12 +65,8 @@ impl Default for DatabaseConfig {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Default)]
-#[cfg_attr(
-    feature = "config",
-    derive(serde::Deserialize),
-    serde(default, deny_unknown_fields)
-)]
+#[derive(Debug, Clone, PartialEq, Eq, Default, Deserialize)]
+#[serde(default, deny_unknown_fields)]
 pub struct LogConfig {
     /// Verbosity. The `RUST_LOG` environment variable overrides it.
     pub level: LogLevel,
@@ -59,12 +75,8 @@ pub struct LogConfig {
 /// Page-store tunables from `docs/dd-001-large-index.md`. They are validated
 /// now so config files written today stay valid, and take effect once the
 /// page store lands.
-#[derive(Debug, Clone, PartialEq, Eq)]
-#[cfg_attr(
-    feature = "config",
-    derive(serde::Deserialize),
-    serde(default, deny_unknown_fields)
-)]
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+#[serde(default, deny_unknown_fields)]
 pub struct StorageConfig {
     /// Page size in bytes: a power of two from 4096 to 65536.
     pub page_size: u32,
@@ -81,12 +93,8 @@ impl Default for StorageConfig {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
-#[cfg_attr(
-    feature = "config",
-    derive(serde::Deserialize),
-    serde(rename_all = "lowercase")
-)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Deserialize)]
+#[serde(rename_all = "lowercase")]
 pub enum LogLevel {
     Off,
     Error,
@@ -111,10 +119,29 @@ impl LogLevel {
 }
 
 impl Config {
+    /// Parse and validate settings from TOML text.
+    pub fn from_toml_str(text: &str) -> Result<Config, ConfigError> {
+        Config::parse(text).map_err(ConfigError::new)
+    }
+
+    /// Read, parse and validate the settings file at `path`.
+    pub fn load(path: impl AsRef<Path>) -> Result<Config, ConfigError> {
+        let path = path.as_ref();
+        let text = std::fs::read_to_string(path)
+            .map_err(|e| ConfigError::new(format!("cannot read {}: {e}", path.display())))?;
+        Config::parse(&text).map_err(|e| ConfigError::new(format!("{}: {e}", path.display())))
+    }
+
     /// Check every value. [`Config::from_toml_str`] calls this; call it yourself
     /// after building a `Config` by hand.
-    pub fn validate(&self) -> Result<(), Error> {
-        self.check().map_err(Error::Config)
+    pub fn validate(&self) -> Result<(), ConfigError> {
+        self.check().map_err(ConfigError::new)
+    }
+
+    fn parse(text: &str) -> Result<Config, String> {
+        let config: Config = toml::from_str(text).map_err(|e| e.to_string())?;
+        config.check()?;
+        Ok(config)
     }
 
     fn check(&self) -> Result<(), String> {
@@ -132,27 +159,5 @@ impl Config {
             return Err("database.path must not be empty".into());
         }
         Ok(())
-    }
-
-    /// Parse and validate settings from TOML text.
-    #[cfg(feature = "config")]
-    pub fn from_toml_str(text: &str) -> Result<Config, Error> {
-        Config::parse(text).map_err(Error::Config)
-    }
-
-    /// Read, parse and validate the settings file at `path`.
-    #[cfg(feature = "config")]
-    pub fn load(path: impl AsRef<std::path::Path>) -> Result<Config, Error> {
-        let path = path.as_ref();
-        let text = std::fs::read_to_string(path)
-            .map_err(|e| Error::Config(format!("cannot read {}: {e}", path.display())))?;
-        Config::parse(&text).map_err(|e| Error::Config(format!("{}: {e}", path.display())))
-    }
-
-    #[cfg(feature = "config")]
-    fn parse(text: &str) -> Result<Config, String> {
-        let config: Config = toml::from_str(text).map_err(|e| e.to_string())?;
-        config.check()?;
-        Ok(config)
     }
 }

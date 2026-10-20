@@ -1,0 +1,16 @@
+[package]
+name = "tdb-core"
+description = "The tdb storage engine: types, records, tables, and the database file"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+
+[dependencies]
+log.workspace = true
+
+[dev-dependencies]
+tempfile.workspace = true
+
+[lints]
+workspace = true

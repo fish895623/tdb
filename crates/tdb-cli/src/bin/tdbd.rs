@@ -4,8 +4,8 @@ use std::path::PathBuf;
 
 use anyhow::{Context, Result, bail};
 use env_logger::{Env, Target};
-use tdb::config::DEFAULT_CONFIG_FILE;
-use tdb::{Config, Database, Field, FieldType};
+use tdb_config::{Config, DEFAULT_CONFIG_FILE};
+use tdb_core::{Database, Field, FieldType};
 
 const USAGE: &str = "usage: tdbd [--config <path>]
 

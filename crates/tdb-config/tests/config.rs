@@ -1,17 +1,16 @@
 use std::fs;
 use std::path::{Path, PathBuf};
 
-use tdb::config::{LogLevel, MAX_PAGE_SIZE, MIN_PAGE_SIZE};
-use tdb::{Config, Error};
+use tdb_config::{Config, ConfigError, LogLevel, MAX_PAGE_SIZE, MIN_PAGE_SIZE};
 
-fn parse(text: &str) -> Result<Config, Error> {
+fn parse(text: &str) -> Result<Config, ConfigError> {
     Config::from_toml_str(text)
 }
 
 fn config_error(text: &str) -> String {
     match parse(text) {
-        Err(Error::Config(msg)) => msg,
-        other => panic!("expected Error::Config, got {other:?}"),
+        Err(e) => e.message().to_string(),
+        Ok(config) => panic!("expected an error, got {config:?}"),
     }
 }
 
@@ -28,7 +27,7 @@ fn config_defaults_are_the_documented_values() {
 #[test]
 fn config_the_committed_config_toml_equals_the_defaults() {
     // config.toml documents the defaults; this fails if the two drift apart.
-    let path = Path::new(env!("CARGO_MANIFEST_DIR")).join("config.toml");
+    let path = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../config.toml");
     assert_eq!(Config::load(path).unwrap(), Config::default());
 }
 
@@ -142,7 +141,7 @@ fn config_database_path_must_not_be_empty() {
 fn config_validate_checks_hand_built_settings() {
     let mut c = Config::default();
     c.storage.page_size = 5000;
-    assert!(matches!(c.validate(), Err(Error::Config(_))));
+    assert!(c.validate().is_err());
 }
 
 #[test]
@@ -166,9 +165,10 @@ fn config_load_reads_a_file() {
 fn config_load_missing_file_names_the_path() {
     let dir = tempfile::tempdir().unwrap();
     let path = dir.path().join("nope.toml");
-    let Err(Error::Config(msg)) = Config::load(&path) else {
-        panic!("expected Error::Config");
+    let Err(err) = Config::load(&path) else {
+        panic!("expected an error");
     };
+    let msg = err.message();
     assert!(msg.contains("cannot read"), "{msg}");
     assert!(msg.contains("nope.toml"), "{msg}");
 }
@@ -178,9 +178,10 @@ fn config_load_invalid_file_names_the_path_and_the_problem() {
     let dir = tempfile::tempdir().unwrap();
     let path = dir.path().join("bad.toml");
     fs::write(&path, "[storage]\npage_size = 3000\n").unwrap();
-    let Err(Error::Config(msg)) = Config::load(&path) else {
-        panic!("expected Error::Config");
+    let Err(err) = Config::load(&path) else {
+        panic!("expected an error");
     };
+    let msg = err.message();
     assert!(msg.contains("bad.toml"), "{msg}");
     assert!(msg.contains("page_size"), "{msg}");
 }
@@ -188,5 +189,5 @@ fn config_load_invalid_file_names_the_path_and_the_problem() {
 #[test]
 fn config_load_directory_is_an_error_not_a_panic() {
     let dir = tempfile::tempdir().unwrap();
-    assert!(matches!(Config::load(dir.path()), Err(Error::Config(_))));
+    assert!(Config::load(dir.path()).is_err());
 }
