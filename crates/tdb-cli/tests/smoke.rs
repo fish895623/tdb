@@ -1,21 +1,19 @@
 //! Runs the `tdbd` program end to end.
 
+mod support;
+
 use std::fs;
 use std::path::Path;
-use std::process::{Command, Output};
+use std::process::Output;
 
-/// Run `tdbd` in `dir` with a clean environment (no inherited RUST_LOG or
-/// TDB_CONFIG) so the results don't depend on the developer's shell.
+use support::tdbd_command;
+
+/// Run `tdbd --once` in `dir` and collect its output. Without `--once` the
+/// program stays up until it is signalled; see the daemon tests below.
 fn tdbd(dir: &Path, args: &[&str], envs: &[(&str, &str)]) -> Output {
-    let mut cmd = Command::new(env!("CARGO_BIN_EXE_tdbd"));
-    cmd.current_dir(dir)
-        .args(args)
-        .env_remove("RUST_LOG")
-        .env_remove("TDB_CONFIG");
-    for (key, value) in envs {
-        cmd.env(key, value);
-    }
-    cmd.output().unwrap()
+    let mut all = vec!["--once"];
+    all.extend_from_slice(args);
+    tdbd_command(dir, &all, envs).output().unwrap()
 }
 
 fn stdout(out: &Output) -> String {
@@ -171,19 +169,281 @@ fn tdbd_fails_when_an_explicit_config_is_missing() {
 }
 
 #[test]
-fn tdbd_rejects_bad_arguments_and_prints_help_on_request() {
+fn tdbd_rejects_bad_arguments_with_a_usage_error() {
     let dir = tempfile::tempdir().unwrap();
 
     let out = tdbd(dir.path(), &["--bogus"], &[]);
-    assert!(!out.status.success());
-    assert!(stderr(&out).contains("usage: tdbd"));
+    assert_eq!(out.status.code(), Some(2));
+    let err = stderr(&out);
+    assert!(err.contains("--bogus"), "{err}");
+    assert!(err.contains("Usage: tdbd"), "{err}");
+
+    let out = tdbd(dir.path(), &["extra"], &[]);
+    assert_eq!(out.status.code(), Some(2));
+    assert!(stderr(&out).contains("extra"));
 
     let out = tdbd(dir.path(), &["--config"], &[]);
-    assert!(!out.status.success());
-    assert!(stderr(&out).contains("--config needs a path"));
+    assert_eq!(out.status.code(), Some(2));
+    let err = stderr(&out);
+    assert!(err.contains("--config <PATH>"), "{err}");
+    assert!(err.contains("a value is required"), "{err}");
 
-    let out = tdbd(dir.path(), &["--help"], &[]);
-    assert!(out.status.success());
-    assert!(stdout(&out).contains("usage: tdbd"));
+    // A bad argument stops before the database is opened.
     assert!(!dir.path().join("tdatabase.db").exists());
+}
+
+#[test]
+fn tdbd_prints_help_and_version_without_touching_the_database() {
+    let dir = tempfile::tempdir().unwrap();
+
+    for flag in ["--help", "-h"] {
+        let out = tdbd(dir.path(), &[flag], &[]);
+        assert!(out.status.success());
+        let text = stdout(&out);
+        assert!(text.contains("Usage: tdbd"), "{text}");
+        assert!(text.contains("--config <PATH>"), "{text}");
+        assert!(text.contains("$TDB_CONFIG"), "{text}");
+    }
+
+    for flag in ["--version", "-V"] {
+        let out = tdbd(dir.path(), &[flag], &[]);
+        assert!(out.status.success());
+        assert_eq!(
+            stdout(&out).trim(),
+            concat!("tdbd ", env!("CARGO_PKG_VERSION"))
+        );
+    }
+
+    assert!(!dir.path().join("tdatabase.db").exists());
+}
+
+#[test]
+fn tdbd_once_exits_by_itself_without_announcing_a_running_daemon() {
+    let dir = tempfile::tempdir().unwrap();
+    let out = tdbd(dir.path(), &[], &[]);
+    assert!(out.status.success(), "{}", stderr(&out));
+    assert!(!stdout(&out).contains("is running"));
+}
+
+#[test]
+fn tdbd_help_describes_once_and_the_shutdown_signals() {
+    let dir = tempfile::tempdir().unwrap();
+    let text = stdout(&tdbd(dir.path(), &["--help"], &[]));
+    assert!(text.contains("--once"), "{text}");
+    assert!(text.contains("SIGTERM"), "{text}");
+}
+
+#[cfg(unix)]
+mod daemon {
+    //! `tdbd` without `--once`: it stays up on its async runtime, serves
+    //! `tdb://` clients, and shuts down cleanly on SIGINT or SIGTERM.
+
+    use std::net::{TcpListener, TcpStream};
+    use std::thread;
+    use std::time::Duration;
+
+    use tdb_protocol::{Endpoint, Request, Response, VERSION};
+
+    use super::support::{Daemon, tdbd_command};
+    use super::{fs, stderr, stdout, tdbd};
+
+    #[test]
+    fn tdbd_stays_up_until_a_stop_signal_then_exits_cleanly() {
+        for (signal, name) in [("TERM", "SIGTERM"), ("INT", "SIGINT")] {
+            let dir = tempfile::tempdir().unwrap();
+            let mut daemon = Daemon::spawn(dir.path(), &[]);
+            daemon.wait_for("is running");
+
+            // It has not exited on its own.
+            thread::sleep(Duration::from_millis(300));
+            assert!(daemon.child.try_wait().unwrap().is_none(), "{name}");
+
+            daemon.signal(signal);
+            let status = daemon.wait_exit();
+            assert!(status.success(), "{name}: {status}");
+
+            let text = daemon.output();
+            assert!(text.contains(&format!("Received {name}")), "{name}: {text}");
+            assert!(text.contains("tdbd stopped."), "{name}: {text}");
+            assert!(dir.path().join("tdatabase.db").exists(), "{name}");
+        }
+    }
+
+    #[test]
+    fn tdbd_has_flushed_the_startup_records_before_it_reports_running() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut daemon = Daemon::spawn(dir.path(), &[]);
+        daemon.wait_for("is running");
+
+        // Killed outright: nothing gets a chance to flush on the way out.
+        daemon.child.kill().unwrap();
+        daemon.wait_exit();
+
+        let out = tdbd(dir.path(), &[], &[]);
+        assert!(out.status.success(), "{}", stderr(&out));
+        assert!(stdout(&out).contains("has 4 record(s)"));
+    }
+
+    #[test]
+    fn tdbd_uses_the_configured_database_when_running_as_a_daemon() {
+        let dir = tempfile::tempdir().unwrap();
+        fs::write(
+            dir.path().join("config.toml"),
+            "[database]\npath = \"daemon.db\"\n[log]\nlevel = \"off\"\n",
+        )
+        .unwrap();
+
+        let mut daemon = Daemon::spawn(dir.path(), &[]);
+        daemon.wait_for("is running");
+        daemon.signal("TERM");
+        assert!(daemon.wait_exit().success());
+        assert!(dir.path().join("daemon.db").exists());
+        assert!(!dir.path().join("tdatabase.db").exists());
+    }
+
+    #[test]
+    fn tdbd_fails_fast_on_a_bad_config_instead_of_staying_up() {
+        let dir = tempfile::tempdir().unwrap();
+        fs::write(dir.path().join("config.toml"), "[log]\nlvl = \"info\"\n").unwrap();
+
+        let mut daemon = Daemon::spawn(dir.path(), &[]);
+        let status = daemon.wait_exit();
+        assert_eq!(status.code(), Some(1));
+        assert!(!daemon.output().contains("is running"));
+        assert!(!dir.path().join("tdatabase.db").exists());
+    }
+
+    #[test]
+    fn tdbd_announces_the_address_it_listens_on_and_accepts_connections() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut daemon = Daemon::spawn(dir.path(), &[]);
+        let addr = daemon.addr();
+        assert!(addr.ip().is_loopback(), "{addr}");
+        assert_ne!(addr.port(), 0, "{addr}");
+
+        // It speaks the protocol on that address.
+        let mut stream = TcpStream::connect(addr).unwrap();
+        stream
+            .set_read_timeout(Some(Duration::from_secs(10)))
+            .unwrap();
+        let url = format!("tdb://{addr}/keyval/main");
+        let route = url.parse::<Endpoint>().unwrap().route().clone();
+        Request::Hello {
+            version: VERSION,
+            route,
+        }
+        .write_to(&mut stream)
+        .unwrap();
+        let reply = Response::read_from(&mut stream).unwrap();
+        assert_eq!(reply, Some(Response::HelloOk { version: VERSION }));
+    }
+
+    #[test]
+    fn tdbd_listen_flag_overrides_the_configured_address() {
+        // The configured address is taken, so only the flag can work.
+        let taken = TcpListener::bind("127.0.0.1:0").unwrap();
+        let dir = tempfile::tempdir().unwrap();
+        fs::write(
+            dir.path().join("config.toml"),
+            format!("[server]\nlisten = \"{}\"\n", taken.local_addr().unwrap()),
+        )
+        .unwrap();
+
+        // `spawn` passes `--listen 127.0.0.1:0`.
+        let mut daemon = Daemon::spawn(dir.path(), &[]);
+        let addr = daemon.addr();
+        assert_ne!(addr, taken.local_addr().unwrap());
+        daemon.stop();
+    }
+
+    #[test]
+    fn tdbd_listens_on_the_configured_address_without_the_flag() {
+        let dir = tempfile::tempdir().unwrap();
+        fs::write(
+            dir.path().join("config.toml"),
+            "[server]\nlisten = \"127.0.0.1:0\"\n",
+        )
+        .unwrap();
+
+        let mut daemon = Daemon::spawn_raw(dir.path(), &[]);
+        assert!(daemon.addr().ip().is_loopback());
+        daemon.stop();
+    }
+
+    #[test]
+    fn tdbd_fails_before_touching_the_database_when_the_address_is_in_use() {
+        let taken = TcpListener::bind("127.0.0.1:0").unwrap();
+        let addr = taken.local_addr().unwrap().to_string();
+        let dir = tempfile::tempdir().unwrap();
+
+        let out = tdbd_command(dir.path(), &["--listen", &addr], &[])
+            .output()
+            .unwrap();
+        assert_eq!(out.status.code(), Some(1));
+        let err = stderr(&out);
+        assert!(err.contains("listening on"), "{err}");
+        assert!(err.contains(&addr), "{err}");
+        assert!(!dir.path().join("tdatabase.db").exists());
+    }
+
+    #[test]
+    fn tdbd_once_opens_no_listener() {
+        // An address that is taken would fail a bind, so success shows there
+        // was none.
+        let taken = TcpListener::bind("127.0.0.1:0").unwrap();
+        let addr = taken.local_addr().unwrap().to_string();
+        let dir = tempfile::tempdir().unwrap();
+
+        let out = tdbd(dir.path(), &["--listen", &addr], &[]);
+        assert!(out.status.success(), "{}", stderr(&out));
+    }
+
+    #[test]
+    fn tdbd_rejects_a_listen_address_that_is_not_an_ip_and_port() {
+        let dir = tempfile::tempdir().unwrap();
+        for bad in ["nonsense", "localhost:80", "127.0.0.1", "127.0.0.1:70000"] {
+            let out = tdbd(dir.path(), &["--listen", bad], &[]);
+            assert_eq!(out.status.code(), Some(2), "{bad}");
+            assert!(stderr(&out).contains("--listen"), "{bad}: {}", stderr(&out));
+        }
+
+        fs::write(
+            dir.path().join("config.toml"),
+            "[server]\nlisten = \"localhost:80\"\n",
+        )
+        .unwrap();
+        let out = tdbd(dir.path(), &[], &[]);
+        assert_eq!(out.status.code(), Some(1));
+        assert!(stderr(&out).contains("listen"), "{}", stderr(&out));
+        assert!(!dir.path().join("tdatabase.db").exists());
+    }
+
+    #[test]
+    fn tdbd_closes_connected_clients_when_it_shuts_down() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut daemon = Daemon::spawn(dir.path(), &[]);
+        let addr = daemon.addr();
+
+        let mut client = TcpStream::connect(addr).unwrap();
+        client
+            .set_read_timeout(Some(Duration::from_secs(10)))
+            .unwrap();
+        let route = format!("tdb://{addr}/graph/social")
+            .parse::<Endpoint>()
+            .unwrap()
+            .route()
+            .clone();
+        Request::Hello {
+            version: VERSION,
+            route,
+        }
+        .write_to(&mut client)
+        .unwrap();
+        assert!(Response::read_from(&mut client).unwrap().is_some());
+
+        // The connection is idle and open; shutdown must not wait for it.
+        let text = daemon.stop();
+        assert!(text.contains("tdbd stopped."), "{text}");
+        assert_eq!(Response::read_from(&mut client).unwrap(), None);
+    }
 }

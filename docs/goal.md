@@ -62,6 +62,7 @@ model is a key encoding over that, not a new storage engine.
 | Variable-length types (`kText`)                             | ⏳ planned          |
 | Delete / update / WAL                                       | ⏳ planned          |
 | SQL query layer                                             | ⏳ planned          |
+| Wire protocol, `tdbd` listener, `tdb --url` client (dd-005) | ✅ lexing only      |
 
 ## IDE Integration (schema-aware tooling)
 

@@ -4,12 +4,18 @@
 //! instead of a silently ignored setting.
 
 use std::fmt;
+use std::net::{Ipv4Addr, SocketAddr};
 use std::path::{Path, PathBuf};
 
 use serde::Deserialize;
 
 /// The file the programs look for in the current directory.
 pub const DEFAULT_CONFIG_FILE: &str = "config.toml";
+
+/// The port `tdbd` listens on unless told otherwise. `tdb-protocol` has the
+/// same number as `DEFAULT_PORT`, for clients; a test in `tdb-cli` keeps the
+/// two equal.
+pub const DEFAULT_LISTEN_PORT: u16 = 7878;
 
 pub const MIN_PAGE_SIZE: u32 = 4096;
 pub const MAX_PAGE_SIZE: u32 = 65536;
@@ -47,6 +53,7 @@ impl std::error::Error for ConfigError {}
 pub struct Config {
     pub database: DatabaseConfig,
     pub log: LogConfig,
+    pub server: ServerConfig,
     pub storage: StorageConfig,
 }
 
@@ -61,6 +68,23 @@ impl Default for DatabaseConfig {
     fn default() -> Self {
         DatabaseConfig {
             path: PathBuf::from("tdatabase.db"),
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+#[serde(default, deny_unknown_fields)]
+pub struct ServerConfig {
+    /// The address `tdbd` accepts `tdb://` connections on. Loopback by
+    /// default: there is no authentication yet, so reaching beyond this
+    /// machine is a decision to make on purpose. Port 0 picks a free port.
+    pub listen: SocketAddr,
+}
+
+impl Default for ServerConfig {
+    fn default() -> Self {
+        ServerConfig {
+            listen: SocketAddr::from((Ipv4Addr::LOCALHOST, DEFAULT_LISTEN_PORT)),
         }
     }
 }

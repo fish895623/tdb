@@ -1,7 +1,10 @@
 use std::fs;
+use std::net::SocketAddr;
 use std::path::{Path, PathBuf};
 
-use tdb_config::{Config, ConfigError, LogLevel, MAX_PAGE_SIZE, MIN_PAGE_SIZE};
+use tdb_config::{
+    Config, ConfigError, DEFAULT_LISTEN_PORT, LogLevel, MAX_PAGE_SIZE, MIN_PAGE_SIZE,
+};
 
 fn parse(text: &str) -> Result<Config, ConfigError> {
     Config::from_toml_str(text)
@@ -19,6 +22,11 @@ fn config_defaults_are_the_documented_values() {
     let c = Config::default();
     assert_eq!(c.database.path, PathBuf::from("tdatabase.db"));
     assert_eq!(c.log.level, LogLevel::Trace);
+    assert_eq!(
+        c.server.listen,
+        "127.0.0.1:7878".parse::<SocketAddr>().unwrap()
+    );
+    assert_eq!(c.server.listen.port(), DEFAULT_LISTEN_PORT);
     assert_eq!(c.storage.page_size, 16384);
     assert_eq!(c.storage.buffer_pool_mb, 256);
     c.validate().unwrap();
@@ -44,12 +52,18 @@ fn config_reads_every_setting() {
         path = "data/main.db"
         [log]
         level = "warn"
+        [server]
+        listen = "0.0.0.0:9000"
         [storage]
         page_size = 4096
         buffer_pool_mb = 1024
         "#,
     )
     .unwrap();
+    assert_eq!(
+        c.server.listen,
+        "0.0.0.0:9000".parse::<SocketAddr>().unwrap()
+    );
     assert_eq!(c.database.path, PathBuf::from("data/main.db"));
     assert_eq!(c.log.level, LogLevel::Warn);
     assert_eq!(c.storage.page_size, 4096);
@@ -103,6 +117,36 @@ fn config_rejects_bad_values() {
     assert!(config_error("[storage]\npage_size = \"big\"\n").contains("page_size"));
     assert!(config_error("[storage]\npage_size = -4096\n").contains("page_size"));
     assert!(config_error("[database]\npath = 5\n").contains("path"));
+    assert!(config_error("[server]\nlisten = 7878\n").contains("listen"));
+}
+
+#[test]
+fn config_server_listen_must_be_a_socket_address() {
+    for ok in ["127.0.0.1:7878", "0.0.0.0:1", "[::1]:7878", "127.0.0.1:0"] {
+        assert_eq!(
+            parse(&format!("[server]\nlisten = \"{ok}\"\n"))
+                .unwrap()
+                .server
+                .listen,
+            ok.parse::<SocketAddr>().unwrap(),
+            "{ok}"
+        );
+    }
+    // A host name, a missing port and an out-of-range port are all refused:
+    // the daemon binds exactly what is written, with no lookup.
+    for bad in [
+        "localhost:7878",
+        "127.0.0.1",
+        ":7878",
+        "127.0.0.1:70000",
+        "",
+    ] {
+        let msg = config_error(&format!("[server]\nlisten = \"{bad}\"\n"));
+        assert!(
+            msg.contains("listen") || msg.contains("socket address"),
+            "{bad}: {msg}"
+        );
+    }
 }
 
 #[test]
